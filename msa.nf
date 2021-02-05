@@ -11,9 +11,16 @@ checkMsaArgs(params)
 
 // Import pipeline modules
 include {runMSA} from '../nf-modules/general/runMSA'
+include { pep2nuc } from '../nf-modules/general/pep2nuc'
 
 workflow MSA {    
     main:
+
+        // Install cogent3 into conda environment
+        File path = new File("/hpcfs/users/$LOGNAME/nf-condaEnvs/cogentInstallCheck.ok")
+        Channel.value(path.isDirectory()).set { ch_check }
+        install_cogent3(ch_check)
+        install_cogent3.out.ifEmpty('exists').set { ch_cogent_check }
 
         // Data channel - Fasta files
         files_path = params.files_dir + '/' + params.files_ext
@@ -38,7 +45,7 @@ workflow MSA {
             .set { ch_files}
 
         // Align sequences
-        runMSA(ch_files, ch_ids, params.outdir,
+        runMSA(ch_cogent_check, ch_files, ch_ids, params.outdir,
                params.aligner, params.aligner_args)
 
         // Convert to nucleotide
@@ -79,9 +86,7 @@ workflow MSA {
             ch_input_p2n.map { id, aln, nuc -> return aln }.collect().set { aln }
             ch_input_p2n.map { id, aln, nuc -> return nuc }.collect().set { nuc }
 
-            ids.view()
-            aln.view()
-            nuc.view()
+            pep2nuc(ids, aln, nuc, params.outdir)
         }
 
 }
