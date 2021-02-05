@@ -13,6 +13,7 @@ checkMsaArgs(params)
 include { install_cogent3 } from '../nf-modules/general/install_cogent3'
 include { runMSA } from '../nf-modules/general/runMSA'
 include { pep2nuc } from '../nf-modules/general/pep2nuc'
+include { gblocks } from '../nf-modules/gblocks/0.91b/gblocks'
 
 workflow MSA {    
     main:
@@ -88,6 +89,22 @@ workflow MSA {
             ch_input_p2n.map { id, aln, nuc -> return nuc }.collect().set { nuc }
 
             pep2nuc(ids, aln, nuc, params.outdir)
+        }
+
+        // Input for Gblocks
+        if(params.clean_alignments && params.pep2nuc) {
+            pep2nuc.out.translated.set { ch_gblocks }
+            gblocks(ch_gblocks,
+                    params.outdir,
+                    'd',
+                    params.gblocks_args)
+
+        } else if(params.clean_alignments) {
+            runMSA.out.alignments.map {id, aln -> return aln}.set { ch_gblocks }
+            gblocks(ch_gblocks,
+                    params.outdir,
+                    'p',
+                    params.gblocks_args)
         }
 
 }
