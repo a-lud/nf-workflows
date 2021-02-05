@@ -24,14 +24,19 @@ workflow MSA {
         
         // Data channel - ID and files
         ch_files
-            .branch {
-                id: it[0]
-                file: it[1]
+            .map { id, file ->
+                return id
             }
-            .set { ch_parts }
+            .set { ch_ids }
+        
+        ch_files
+            .map { id, file ->
+                return file
+            }
+            .set { ch_files}
 
         // Align sequences
-        runMSA(ch_parts.file, ch_parts.id, params.outdir,
+        runMSA(ch_files, ch_ids, params.outdir,
                params.aligner, params.aligner_args)
 
 }
