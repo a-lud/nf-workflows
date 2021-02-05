@@ -10,7 +10,8 @@ include {checkMsaArgs} from '../lib/utils'
 checkMsaArgs(params)
 
 // Import pipeline modules
-include {runMSA} from '../nf-modules/general/runMSA'
+include { install_cogent3 } from '../nf-modules/general/install_cogent3'
+include { runMSA } from '../nf-modules/general/runMSA'
 include { pep2nuc } from '../nf-modules/general/pep2nuc'
 
 workflow MSA {    
