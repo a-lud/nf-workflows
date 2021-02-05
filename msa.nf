@@ -27,12 +27,14 @@ workflow MSA {
             .map { id, file ->
                 return id
             }
+            .collect()
             .set { ch_ids }
         
         ch_files
             .map { id, file ->
                 return file
             }
+            .collect()
             .set { ch_files}
 
         // Align sequences
