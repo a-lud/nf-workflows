@@ -4,8 +4,9 @@ HyPhy pipeline
 */
 
 // Import utility functions
-include {checkHyphyArgs} from '../lib/utils'
-checkHyphyArgs(params)
+include {checkHyphyArgs;printHyphyArgs} from '../lib/utils'
+checked_args = checkHyphyArgs(params)
+printHyphyArgs(checked_args)
 
 // Import pipeline modules
 
