@@ -38,10 +38,21 @@ workflow HYPHY {
         //     }
         //     .collect()
         //     .set { ch_aln }
+        
+        // Combine alignment files + trees
+        ch_aln
+            .combine(ch_tree)
+            .set { ch_inputs }
 
-        ch_aln.combine(ch_tree).combine(checked.method).view()
+        if(checked.method.any { it == 'fel' }) {
+            fel(ch_inputs, params.outdir, params.fel_optional)
+        } else if(checked.method.any { it == 'absrel' } ) {
+            println('aBSREL')
+        } else if(checked.method.any { it == 'meme' } ) {
+            println('MEME')
+        }
 
-        // fel(ch_aln, ch_tree, params.outdir, params.fel_optional)
+        // 
 
         // Obtain MSA files
 
