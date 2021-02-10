@@ -6,7 +6,7 @@ HyPhy pipeline
 // Import utility functions
 include {checkHyphyArgs;printHyphyArgs} from '../lib/utils'
 checked_args = checkHyphyArgs(params)
-printHyphyArgs(checked_args)
+printHyphyArgs(checked_args, params.pipeline)
 
 // Import pipeline modules
 
