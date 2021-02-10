@@ -5,17 +5,39 @@ HyPhy pipeline
 
 // Import utility functions
 include {checkHyphyArgs;printHyphyArgs} from '../lib/utils'
-checked_args = checkHyphyArgs(params)
-printHyphyArgs(checked_args, params.pipeline)
 
 // Import pipeline modules
+include { fel } from '../nf-modules/hyphy/2.5.25/fel'
 
+// Check data
+checked = checkHyphyArgs(params)
+printHyphyArgs(checked, params.pipeline)
 
 // Sub-workflow
 workflow HYPHY {
     main:
+        // Data channel - Fasta files
+        files_path = params.files_dir + '/' + params.files_ext
+        Channel
+            .fromFilePairs(files_path, size: 1)
+            .ifEmpty { exit 1, "Can't import files at ${files_path}"}
+            .set { ch_files }
+        
+        // Data channel - Tree file
+        Channel
+            fromPath(params.tree)
+            .ifEmpty { exit 1, "Can't import tree file ${params.tree}"}
+            .set { ch_tree }
 
-    println('HELLO')
+        // Data channel - ID
+        ch_files
+            .map { id, file ->
+                return file
+            }
+            .collect()
+            .set { ch_aln}
+
+        fel(ch_aln, ch_tree, params.outdir, params.fel_optional)
 
         // Obtain MSA files
 
