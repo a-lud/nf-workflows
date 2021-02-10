@@ -35,9 +35,11 @@ workflow HYPHY {
                 return file
             }
             .collect()
-            .set { ch_aln}
+            .set { ch_aln }
 
-        fel(ch_aln, ch_tree, params.outdir, params.fel_optional)
+        ch_aln.view()
+        ch_tree.view()
+        // fel(ch_aln, ch_tree, params.outdir, params.fel_optional)
 
         // Obtain MSA files
 
