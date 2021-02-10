@@ -39,7 +39,7 @@ workflow HYPHY {
         //     .collect()
         //     .set { ch_aln }
 
-        ch_aln.combine(ch_tree).view()
+        ch_aln.combine(ch_tree).combine(checked.method).view()
 
         // fel(ch_aln, ch_tree, params.outdir, params.fel_optional)
 
