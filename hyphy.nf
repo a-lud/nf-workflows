@@ -25,7 +25,7 @@ workflow HYPHY {
         
         // Data channel - Tree file
         Channel
-            fromPath(params.tree)
+            .fromPath(params.tree)
             .ifEmpty { exit 1, "Can't import tree file ${params.tree}"}
             .set { ch_tree }
 
