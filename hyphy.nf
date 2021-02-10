@@ -21,6 +21,7 @@ workflow HYPHY {
         Channel
             .fromPath(files_path)
             .ifEmpty { exit 1, "Can't import files at ${files_path}"}
+            .collect()
             .set { ch_aln }
         
         // Data channel - Tree file
@@ -37,8 +38,7 @@ workflow HYPHY {
         //     .collect()
         //     .set { ch_aln }
 
-        ch_aln.view()
-        ch_tree.view()
+        ch_aln.combine(ch_tree).view()
 
         // fel(ch_aln, ch_tree, params.outdir, params.fel_optional)
 
