@@ -19,9 +19,9 @@ workflow HYPHY {
         // Data channel - Fasta files
         files_path = params.files_dir + '/' + params.files_ext
         Channel
-            .fromFilePairs(files_path, size: 1)
+            .fromPath(files_path)
             .ifEmpty { exit 1, "Can't import files at ${files_path}"}
-            .set { ch_files }
+            .set { ch_aln }
         
         // Data channel - Tree file
         Channel
@@ -30,12 +30,15 @@ workflow HYPHY {
             .set { ch_tree }
 
         // Data channel - ID
-        ch_files
-            .map { id, file ->
-                return file
-            }
-            .collect()
-            .set { ch_aln }
+        // ch_files
+        //     .map { id, file ->
+        //         return file
+        //     }
+        //     .collect()
+        //     .set { ch_aln }
+
+        ch_aln.view()
+        ch_tree.view()
 
         fel(ch_aln, ch_tree, params.outdir, params.fel_optional)
 
