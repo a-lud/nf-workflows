@@ -30,14 +30,6 @@ workflow HYPHY {
             .fromPath(checked.tree)
             .ifEmpty { exit 1, "Can't import tree file ${params.tree}"}
             .set { ch_tree }
-
-        // Data channel - ID
-        // ch_files
-        //     .map { id, file ->
-        //         return file
-        //     }
-        //     .collect()
-        //     .set { ch_aln }
         
         // Combine alignment files + trees
         ch_aln
@@ -46,20 +38,5 @@ workflow HYPHY {
 
         if(checked.method.any { it == 'fel' }) {
             fel(ch_inputs, params.outdir, params.fel_optional)
-        } else if(checked.method.any { it == 'absrel' } ) {
-            println('aBSREL')
-        } else if(checked.method.any { it == 'meme' } ) {
-            println('MEME')
-        }
-
-        // 
-
-        // Obtain MSA files
-
-
-        // Obtain tree files
-
-
-        // HyPhy analyses
-        
+        }        
 }
