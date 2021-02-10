@@ -22,6 +22,7 @@ workflow HYPHY {
             .fromPath(files_path)
             .ifEmpty { exit 1, "Can't import files at ${files_path}"}
             .collect()
+            .toList()
             .set { ch_aln }
         
         // Data channel - Tree file
