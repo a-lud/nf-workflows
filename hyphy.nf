@@ -40,7 +40,7 @@ workflow HYPHY {
         ch_aln.view()
         ch_tree.view()
 
-        fel(ch_aln, ch_tree, params.outdir, params.fel_optional)
+        // fel(ch_aln, ch_tree, params.outdir, params.fel_optional)
 
         // Obtain MSA files
 
