@@ -12,6 +12,12 @@ printHyphyArgs(checked, params.pipeline)
 
 // Import pipeline modules
 include { fel } from '../nf-modules/hyphy/2.5.25/fel'
+include { fel } from '../nf-modules/hyphy/2.5.25/slac'
+include { fel } from '../nf-modules/hyphy/2.5.25/fubar'
+include { fel } from '../nf-modules/hyphy/2.5.25/meme'
+include { fel } from '../nf-modules/hyphy/2.5.25/absrel'
+include { fel } from '../nf-modules/hyphy/2.5.25/busted'
+include { fel } from '../nf-modules/hyphy/2.5.25/relax'
 
 // Sub-workflow
 workflow HYPHY {
@@ -38,5 +44,29 @@ workflow HYPHY {
 
         if(checked.method.any { it == 'fel' }) {
             fel(ch_inputs, params.outdir, params.fel_optional)
+        }
+
+        if(checked.method.any { it == 'slac' }) {
+            slac(ch_inputs, params.outdir, params.fel_optional)
+        }
+
+        if(checked.method.any { it == 'fubar' }) {
+            fubar(ch_inputs, params.outdir, params.fel_optional)
+        }
+
+        if(checked.method.any { it == 'meme' }) {
+            meme(ch_inputs, params.outdir, params.fel_optional)
+        }
+
+        if(checked.method.any { it == 'absrel' }) {
+            absrel(ch_inputs, params.outdir, params.fel_optional)
+        }
+
+        if(checked.method.any { it == 'busted' }) {
+            busted(ch_inputs, params.outdir, params.fel_optional)
+        }
+
+        if(checked.method.any { it == 'relax' }) {
+            relax(ch_inputs, params.outdir, params.fel_optional)
         }
 }
