@@ -12,12 +12,12 @@ printHyphyArgs(checked, params.pipeline)
 
 // Import pipeline modules
 include { fel } from '../nf-modules/hyphy/2.5.25/fel'
-include { fel } from '../nf-modules/hyphy/2.5.25/slac'
-include { fel } from '../nf-modules/hyphy/2.5.25/fubar'
-include { fel } from '../nf-modules/hyphy/2.5.25/meme'
-include { fel } from '../nf-modules/hyphy/2.5.25/absrel'
-include { fel } from '../nf-modules/hyphy/2.5.25/busted'
-include { fel } from '../nf-modules/hyphy/2.5.25/relax'
+include { slac } from '../nf-modules/hyphy/2.5.25/slac'
+include { fubar } from '../nf-modules/hyphy/2.5.25/fubar'
+include { meme } from '../nf-modules/hyphy/2.5.25/meme'
+include { absrel } from '../nf-modules/hyphy/2.5.25/absrel'
+include { busted } from '../nf-modules/hyphy/2.5.25/busted'
+include { relax } from '../nf-modules/hyphy/2.5.25/relax'
 
 // Sub-workflow
 workflow HYPHY {
@@ -47,26 +47,26 @@ workflow HYPHY {
         }
 
         if(checked.method.any { it == 'slac' }) {
-            slac(ch_inputs, params.outdir, params.fel_optional)
+            slac(ch_inputs, params.outdir, params.slac_optional)
         }
 
         if(checked.method.any { it == 'fubar' }) {
-            fubar(ch_inputs, params.outdir, params.fel_optional)
+            fubar(ch_inputs, params.outdir, params.fubar_optional)
         }
 
         if(checked.method.any { it == 'meme' }) {
-            meme(ch_inputs, params.outdir, params.fel_optional)
+            meme(ch_inputs, params.outdir, params.meme_optional)
         }
 
         if(checked.method.any { it == 'absrel' }) {
-            absrel(ch_inputs, params.outdir, params.fel_optional)
+            absrel(ch_inputs, params.outdir, params.absrel_optional)
         }
 
         if(checked.method.any { it == 'busted' }) {
-            busted(ch_inputs, params.outdir, params.fel_optional)
+            busted(ch_inputs, params.outdir, params.busted_optional)
         }
 
         if(checked.method.any { it == 'relax' }) {
-            relax(ch_inputs, params.outdir, params.fel_optional)
+            relax(ch_inputs, params.outdir, params.relax_optional)
         }
 }
