@@ -38,5 +38,5 @@ workflow HYPHY {
 
         if(checked.method.any { it == 'fel' }) {
             fel(ch_inputs, params.outdir, params.fel_optional)
-        }        
+        }
 }
