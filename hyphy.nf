@@ -6,12 +6,12 @@ HyPhy pipeline
 // Import utility functions
 include {checkHyphyArgs;printHyphyArgs} from '../lib/utils'
 
-// Import pipeline modules
-include { fel } from '../nf-modules/hyphy/2.5.25/fel'
-
 // Check data
 checked = checkHyphyArgs(params)
 printHyphyArgs(checked, params.pipeline)
+
+// Import pipeline modules
+include { fel } from '../nf-modules/hyphy/2.5.25/fel'
 
 // Sub-workflow
 workflow HYPHY {
