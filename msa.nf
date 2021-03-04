@@ -6,8 +6,9 @@ MSA pipeline
 */
 
 // Import utility functions
-include {checkMsaArgs} from '../lib/utils'
+include {checkMsaArgs; printMsaArgs} from '../lib/utils'
 checkMsaArgs(params)
+printMsaArgs(params)
 
 // Import pipeline modules
 include { install_cogent3 } from '../nf-modules/general/install_cogent3'
