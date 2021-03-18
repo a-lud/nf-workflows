@@ -15,7 +15,17 @@ printCodemlArgs(checked, params.pipeline)
 
 // Sub-workflow
 workflow CODEML {
-    // main:
+    main:
+
+    files_path = params.files_dir + '/' + params.files_ext
+    Channel
+        .fromPath(files_path)
+        .ifEmpty { exit 1, "Can't import files at ${files_path}"}
+        // .collect()
+        // .toList()
+        .set { ch_aln }
+    
+    ch_aln.view()
 
     // Configure ete evol to work
     // File path = new File("${FASTDIR}/nf-conda_envs/ete")
