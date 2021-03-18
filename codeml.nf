@@ -36,5 +36,6 @@ workflow CODEML {
     codeml(ch_seq_tree,
            checked.models,
            checked.tests,
-           checked.codeml_optional)
+           checked.codeml_optional,
+           params.outdir)
 }
