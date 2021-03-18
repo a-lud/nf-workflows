@@ -19,7 +19,7 @@ workflow CODEML {
 
     files_path = params.files_dir + '/' + params.files_ext
     Channel
-        .fromFilePairs(files_path)
+        .fromFilePairs(files_path, size: 1)
         .ifEmpty { exit 1, "Can't import files at ${files_path}"}
         // .collect()
         // .toList()
