@@ -4,6 +4,9 @@ CodeML pipeline
 */
 
 // Import utility functions
+include {checkCodemlArgs;printCodemlArgs} from '../lib/utils'
+
+// Import utility functions
 include { codeml } from '../nf-modules/ete3/3.1.2/codeml'
 
 // Check data
