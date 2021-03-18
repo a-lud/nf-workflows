@@ -4,7 +4,7 @@ CodeML pipeline
 */
 
 // Import utility functions
-include { codeml } from './nf-modules/codeml/3.1.2/codeml'
+include { codeml } from './nf-modules/ete3/3.1.2/codeml'
 
 // Check data
 checked = checkCodemlArgs(params)
