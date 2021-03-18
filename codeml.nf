@@ -24,7 +24,7 @@ workflow CODEML {
         .set { ch_aln }
     
     Channel
-        .fromPath(params.trees.tokenize(','))
+        .fromPath(checked.trees)
         .ifEmpty { exit 1, "Can't import tree files" }
         .set { ch_tree }
     
@@ -34,7 +34,7 @@ workflow CODEML {
 
     // Run codeml
     codeml(ch_seq_tree,
-           params.models,
-           params.tests,
-           params.codeml_optional)
+           checked.models,
+           checked.tests,
+           checked.codeml_optional)
 }
