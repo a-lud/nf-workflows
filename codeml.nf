@@ -20,12 +20,15 @@ workflow CODEML {
     files_path = params.files_dir + '/' + params.files_ext
     Channel
         .fromFilePairs(files_path, size: 1)
-        .ifEmpty { exit 1, "Can't import files at ${files_path}"}
-        // .collect()
-        // .toList()
+        .ifEmpty { exit 1, "Can't import files at ${files_path}" }
         .set { ch_aln }
     
-    ch_aln.view()
+    Channel
+        .fromPath(params.trees)
+        .ifEmpty { exit 1, "Can't import tree file" }
+        .set { ch_trees }
+
+    ch_trees.view()
 
     // Configure ete evol to work
     // File path = new File("${FASTDIR}/nf-conda_envs/ete")
