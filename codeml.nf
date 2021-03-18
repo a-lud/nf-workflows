@@ -24,26 +24,17 @@ workflow CODEML {
         .set { ch_aln }
     
     Channel
-        .fromPath(params.trees)
-        .ifEmpty { exit 1, "Can't import tree file" }
-        .set { ch_trees }
+        .fromPath(params.trees.tokenize(','))
+        .ifEmpty { exit 1, "Can't import tree files" }
+        .set { ch_tree }
+    
+    ch_aln
+        .combine( ch_tree )
+        .set { ch_seq_tree }
 
-    ch_trees.view()
-
-    // Configure ete evol to work
-    // File path = new File("${FASTDIR}/nf-conda_envs/ete")
-    // Channel.value(path.isDirectory()).set { check }
-    // setup_ete(workflow, check)
-    // setup_ete.out.ifEmpty('exists').set { setup }
-
-    // Run ete-evol
-    // run_codeml(setup,
-    //            seqs_tree_mark,
-    //            params.outdir,
-    //            params.models,
-    //            params.tests,
-    //            params.leaves,
-    //            params.internals,
-    //            params.codeml_param,
-    //            workflow)
+    // Run codeml
+    codeml(ch_seq_tree,
+           params.models,
+           params.tests,
+           params.codeml_optional)
 }
