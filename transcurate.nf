@@ -15,7 +15,8 @@ include { downloadDB } from '../nf-modules/general/transcurate_downloadDB'
 include { cdhit } from '../nf-modules/cdhit/4.8.1/cdhit'
 include { transdecoderLO } from '../nf-modules/transdecoder/5.5.0/transdecoderLO'
 include { transdecoderP } from '../nf-modules/transdecoder/5.5.0/transdecoderP'
-inlcude { blast } from '../nf-modules/blast/2.11.0/blast'
+include { blast } from '../nf-modules/blast/2.11.0/blast'
+include { hmmer } from '../nf-modules/hmmer/3.3.2/hmmer'
 include { gffread } from '../nf-modules/gffread/0.12.1/gffread'
 
 // Sub-workflow
@@ -24,7 +25,7 @@ workflow TRANSCURATE {
         // Data channel - Fasta files
         files_path = params.files_dir + '/' + params.files_ext
         Channel
-            .fromPath(files_path)
+            .fromFilePairs(files_path, size: 1)
             .ifEmpty { exit 1, "Can't import files at ${files_path}"}
             .set { ch_transcripts }
 
@@ -35,28 +36,28 @@ workflow TRANSCURATE {
                 .ifEmpty { exit 1, "Database directory doesn't exist: ${params.database_dir}"}
                 .set { ch_database_dir }
         } else {
-            downloadDB(checked.outdir)
-            downloadDB.out.database_dir.set { ch_database_dir }
+            downloadDB(params.outdir)
+            downloadDB.out.database_files.set { ch_database_dir }
         }
 
         // Remove transcript redundancy
-        cdhit(ch_transcripts, checked.cdhit_pid, checked.outdir)
+        cdhit(ch_transcripts, checked.cdhit_pid, params.outdir)
         
         // TransDecoder step 1
-        transdecoderLO(cdhit.out.fasta, checked.outdir)
+        transdecoderLO(cdhit.out.fasta, params.outdir)
 
         // Homology search
-        blast(transdecoderLO.out.longstORF, ch_database_dir, checked.outdir)
-        hmmer(transdecoderLO.out.longstORF, ch_database_dir, checked.outdir)
+        blast(transdecoderLO.out.longstORF, ch_database_dir, params.outdir)
+        hmmer(transdecoderLO.out.longstORF, ch_database_dir, params.outdir)
 
         // Join channels
         transdecoderLO.out.all.join(blast.out.join(hmmer.out, by: [0]), by: [0]).set { ch_all }
 
         // Transdecoder step 2
-        transdecoderP(ch_all, checked.outdir)
+        transdecoderP(ch_all, params.outdir)
 
         // Complete ORF sequences
         if (checked.completeORFs) {
-            gffread(transdecoderP.out.complete, checked.outdir)
+            gffread(transdecoderP.out.complete, params.outdir)
         }
 }
