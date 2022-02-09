@@ -17,12 +17,12 @@ include { hifiasm_hic } from '../nf-modules/hifiasm/0.16.1/hifiasm-hic'
 include { bwa_mem2_index } from "../nf-modules/bwa-mem2/2.2.1/bwa-mem2-index"
 include { bwa_mem2_mem } from "../nf-modules/bwa-mem2/2.2.1/bwa-mem2-mem"
 include { pin_hic } from '../nf-modules/pin_hic/3.0.0/pin_hic'
-// include { flye } from '../nf-modules/assembly/flye'
+include { busco as busco_contig } from '../nf-modules/busco/5.2.2/busco'
+include { busco as busco_scaffold } from '../nf-modules/busco/5.2.2/busco'
+include { quast } from '../nf-modules/quast/5.0.2/quast'
+include { kat_compare } from '../nf-modules/kat/2.4.2/kat_compare'
 // include { countgapular } from '../nf-modules/1.0/countgapular'
-
-// include { katcompare } from '../nf-modules/assembly/katcompare'
-// include { quast } from '../nf-modules/assembly/quast'
-// include { busco } from '../nf-modules/assembly/busco'
+// include { flye } from '../nf-modules/assembly/flye'
 
 // Sub-workflow
 workflow ASSEMBLY {
@@ -59,6 +59,9 @@ workflow ASSEMBLY {
         }
         .set { ch_haplotypes }
 
+        // BUSCO - contig haplotype assemblies
+        busco_contig(ch_haplotypes, params.busco_db, 'contig', params.outdir)
+
         // Index reference files
         bwa_mem2_index(ch_haplotypes, params.outdir)
         
@@ -77,17 +80,35 @@ workflow ASSEMBLY {
         // Hi-c scaffolding
         pin_hic(bwa_mem2_mem.out.bam, params.outdir)
 
+        // KAT - Compare genome to reads
+        pin_hic.out.scaffolds.take(2).combine(ch_hifi).set { ch_scaff_hifi }
+        kat_compare(ch_scaff_hifi, params.outdir)
+
+        // BUSCO - Scaffold haplotype assemblies
+        busco_scaffold(pin_hic.out.scaffolds.take(2), params.busco_db, 'scaffold', params.outdir)
+
+        // QUAST - scaffold haplotype assemblies
+        quast(pin_hic.out.scaffolds.take(2), params.outdir)
+
     } else {
         // Run the assembly process
         hifiasm(
             ch_hifi,
             params.outdir
         )
+
+        // BUSCO - contig primary assembly
+        busco_contig(hifiasm.out.fa, params.busco_db, 'contig', params.outdir)
+
+        // KAT - Compare genome to reads
+        hifiasm.out.fa.combine(ch_hifi).set { ch_contig_hifi }
+        kat_compare(ch_contig_hifi, params.outdir)
+
+        // QUAST - contig primary assembly
+        quast(hifiasm.out.fa, params.outdir)
     }
 
     // Genome size estimation
-    // TODO: Check this
     kmc(ch_hifi, params.outdir)
     genomescope(kmc.out.histo, params.outdir)
-
 }
