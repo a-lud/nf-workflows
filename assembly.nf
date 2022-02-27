@@ -10,19 +10,22 @@ Genome assembly pipeline
 */
 
 // Import pipeline modules - change to './nf-mod...' after it's all tested
+include { seqkit_fq2fa } from '../nf-modules/seqkit/2.1.0/seqkit_fq2fa'
 include { kmc } from '../nf-modules/kmc/3.2.1/kmc'
 include { genomescope } from '../nf-modules/genomescope/2.0/genomescope'
-include { hifiasm } from '../nf-modules/hifiasm/0.16.1//hifiasm'
+// include { hifiasm } from '../nf-modules/hifiasm/0.16.1//hifiasm'
 include { hifiasm_hic } from '../nf-modules/hifiasm/0.16.1/hifiasm-hic'
 include { bwa_mem2_index } from "../nf-modules/bwa-mem2/2.2.1/bwa-mem2-index"
 include { bwa_mem2_mem } from "../nf-modules/bwa-mem2/2.2.1/bwa-mem2-mem"
 include { pin_hic } from '../nf-modules/pin_hic/3.0.0/pin_hic'
+include { tgsgapcloser } from '../nf-modules/tgs-gapcloser/1.1.1/tgsgapcloser'
 include { busco as busco_contig } from '../nf-modules/busco/5.2.2/busco'
 include { busco as busco_scaffold } from '../nf-modules/busco/5.2.2/busco'
+include { busco_plot } from '../nf-modules/busco/5.2.2/busco_plot'
 include { quast } from '../nf-modules/quast/5.0.2/quast'
-include { kat_compare } from '../nf-modules/kat/2.4.2/kat_compare'
-// include { countgapular } from '../nf-modules/1.0/countgapular'
-// include { flye } from '../nf-modules/assembly/flye'
+include { merqury } from '../nf-modules/merqury/1.3/merqury'
+include { mosdepth } from '../nf-modules/mosdepth/0.3.3/mosdepth'
+include { minimap2_pb_hifi } from '../nf-modules/minimap2/2.24/minimap2_pb_hifi'
 
 // Sub-workflow
 workflow ASSEMBLY {
@@ -37,6 +40,9 @@ workflow ASSEMBLY {
         .ifEmpty { exit 1, "HiFi Fastq files are empty" }
         .set { ch_hifi }
 
+    // FQ2FA - hifi reads
+    seqkit_fq2fa(ch_hifi, params.outdir)
+
     // Hi-C data + run assembly pipeline
     if (params.containsKey("hic")) {
         Channel
@@ -44,9 +50,9 @@ workflow ASSEMBLY {
                 [params.hic.path, params.hic.pattern].join('/'),
                 size: params.hic.nfiles
             )
-            .set { ch_hic }
-
-        // Run the assembly process
+            .set { ch_hic }      
+        
+        // Hifiasm - assemble reads into contigs
         hifiasm_hic(
             ch_hifi,
             ch_hic,
@@ -80,17 +86,31 @@ workflow ASSEMBLY {
         // Hi-c scaffolding
         pin_hic(bwa_mem2_mem.out.bam, params.outdir)
 
-        // KAT - Compare genome to reads
-        pin_hic.out.scaffolds.take(2).combine(ch_hifi).set { ch_scaff_hifi }
-        kat_compare(ch_scaff_hifi, params.outdir)
+        // Gap closing: TGS-GapCloser
+        pin_hic.out.scaffolds.combine(seqkit_fq2fa.out).set { ch_scaff_hifi_fa }
+        tgsgapcloser(ch_scaff_hifi_fa, params.outdir)
+
+        // Mosdepth - HIFI alignment and coverage
+        tgsgapcloser.out.scaff_detailed.combine(ch_hifi).set { ch_filled_hifi_fq }
+        minimap2_pb_hifi(ch_filled_hifi_fq, params.outdir)
+        mosdepth(minimap2_pb_hifi.out, params.outdir)
+
+        // K-mer assessment - Merqury
+        tgsgapcloser.out.scaff.collect().toList().combine(ch_hifi).set { ch_filled_hifi }
+        merqury(ch_filled_hifi, params.outdir)
 
         // BUSCO - Scaffold haplotype assemblies
-        busco_scaffold(pin_hic.out.scaffolds.take(2), params.busco_db, 'scaffold', params.outdir)
+        busco_scaffold(tgsgapcloser.out.scaff_detailed, params.busco_db, 'scaffold', params.outdir)
 
         // QUAST - scaffold haplotype assemblies
-        quast(pin_hic.out.scaffolds.take(2), params.outdir)
+        quast(tgsgapcloser.out.scaff.collect(), params.outdir)
 
+        // BUSCO plot - Generate a summary plot of the BUSCO results (contig and scaffold)
+        busco_contig.out.summary.concat(busco_scaffold.out.summary).collect().set { ch_busco_short }
+        busco_plot(ch_busco_short, params.outdir)
+        
     } else {
+        // TODO: TEST THIS PORTION OF THE PIPELINE
         // Run the assembly process
         hifiasm(
             ch_hifi,
@@ -99,13 +119,27 @@ workflow ASSEMBLY {
 
         // BUSCO - contig primary assembly
         busco_contig(hifiasm.out.fa, params.busco_db, 'contig', params.outdir)
+        
+        // BUSCO plot - Generate a summary plot of the BUSCO results
+        busco_plot(busco_contig.out.summary, params.outdir)
 
-        // KAT - Compare genome to reads
-        hifiasm.out.fa.combine(ch_hifi).set { ch_contig_hifi }
-        kat_compare(ch_contig_hifi, params.outdir)
+        // K-mer assessment - Compare genome to reads
+        hifiasm.out.fa.map { id, val ->
+            return file(val)
+        }
+        .set { ch_contig }
+
+        ch_contig.combine(ch_hifi).set { ch_contig_hifi }
+
+        merqury(ch_contig_hifi, params.outdir)
 
         // QUAST - contig primary assembly
-        quast(hifiasm.out.fa, params.outdir)
+        quast(ch_contig, params.outdir)
+
+        // Mosdepth - HIFI alignment and coverage
+        hifiasm.out.fa.combine(ch_hifi).set { ch_contig_hifi_fq }
+        minimap2_pb_hifi(ch_contig_hifi_fq, params.outdir)
+        mosdepth(minimap2_pb_hifi.out, params.outdir)
     }
 
     // Genome size estimation
