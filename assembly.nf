@@ -100,7 +100,7 @@ workflow ASSEMBLY {
         merqury(ch_filled_hifi, params.outdir)
 
         // BUSCO - Scaffold haplotype assemblies
-        busco_scaffold(tgsgapcloser.out.scaff_detailed, params.busco_db, 'scaffold', params.outdir)
+        busco_scaffold(tgsgapcloser.out.scaff_detailed, params.busco_db, 'gapfilled', params.outdir)
 
         // QUAST - scaffold haplotype assemblies
         quast(tgsgapcloser.out.scaff.collect(), params.outdir)
