@@ -16,8 +16,11 @@ include { genomescope } from '../nf-modules/genomescope/2.0/genomescope'
 // include { hifiasm } from '../nf-modules/hifiasm/0.16.1//hifiasm'
 include { hifiasm_hic } from '../nf-modules/hifiasm/0.16.1/hifiasm-hic'
 include { bwa_mem2_index } from "../nf-modules/bwa-mem2/2.2.1/bwa-mem2-index"
+include { arima_map_filter_combine } from "../nf-modules/arima/1.0.0/arima_map_filter_combine"
+include { arima_dedup_sort } from '../nf-modules/arima/1.0.0/arima_dedup_sort'
 include { bwa_mem2_mem } from "../nf-modules/bwa-mem2/2.2.1/bwa-mem2-mem"
 include { pin_hic } from '../nf-modules/pin_hic/3.0.0/pin_hic'
+include { salsa2 } from '../nf-modules/salsa2/2.3/salsa2'
 include { tgsgapcloser } from '../nf-modules/tgs-gapcloser/1.1.1/tgsgapcloser'
 include { busco as busco_contig } from '../nf-modules/busco/5.2.2/busco'
 include { busco as busco_scaffold } from '../nf-modules/busco/5.2.2/busco'
@@ -63,28 +66,42 @@ workflow ASSEMBLY {
         hifiasm_hic.out.hap_fa.flatten().map { val ->
             return tuple(val.baseName, val)
         }
-        .set { ch_haplotypes }
+        .set { ch_contigs }
 
         // BUSCO - contig haplotype assemblies
-        busco_contig(ch_haplotypes, params.busco_db, 'contig', params.outdir)
+        busco_contig(ch_contigs, params.busco_db, 'contig', params.outdir)
 
         // Index reference files
-        bwa_mem2_index(ch_haplotypes, params.outdir)
+        bwa_mem2_index(ch_contigs, params.outdir)
         
         // Join haplotype channels with index information
-        ch_haplotypes.join(bwa_mem2_index.out.fai.join(bwa_mem2_index.out.bwa_idx)) .set { ch_tmp }
+        ch_contigs.join(bwa_mem2_index.out.fai.join(bwa_mem2_index.out.bwa_idx)).set { ch_tmp }
 
         // Combine idx with hic-read channel
         ch_tmp.combine(ch_hic).set { ch_hap_idx_hic }
         
-        // Align data to reference genomes
-        bwa_mem2_mem(
-            ch_hap_idx_hic,
-            params.outdir
-        )
+        // Arima Hi-C processing
+        arima_map_filter_combine(ch_hap_idx_hic, params.outdir)
+        arima_dedup_sort(arima_map_filter_combine.out.bam, params.outdir)
+
+        // Combine processed Hi-C reads with genome again - join on genome ID
+        ch_contigs.join(arima_dedup_sort.out.bam).set { ch_ref_hic }
 
         // Hi-c scaffolding
-        pin_hic(bwa_mem2_mem.out.bam, params.outdir)
+        switch(params.scaffolder) {
+            case 'all':
+                // Scaffold
+                pin_hic(ch_ref_hic, params.outdir)
+                salsa2(ch_ref_hic, params.outdir)
+                break;
+            case 'salsa2':
+                salsa2(ch_ref_hic, params.outdir)
+
+                break;
+            case 'pin_hic':
+                pin_hic(ch_ref_hic, params.outdir)
+                break
+        }
 
         // Gap closing: TGS-GapCloser
         pin_hic.out.scaffolds.combine(seqkit_fq2fa.out).set { ch_scaff_hifi_fa }
