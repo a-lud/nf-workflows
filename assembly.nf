@@ -1,15 +1,19 @@
 /*
 Genome assembly pipeline
-    * Convert BAM file to fastq file
+    * Remove adapters from HiFi Fastq
+    * Convert FASTQ to FASTA (Used by TgsGapcloser in next pipeline)
     * KMC K-mer analysis + GenomeScope2.0 for genome size estimation
-	* Genome assembly (hifiasm/flye)
-	* QUAST
-	* BUSCO
-	* KAT-compare
-	* countGapular
+	* Genome assembly (hifiasm)
+	* Hi-C read processing
+    * Scaffolding (salsa2/pin_hic)
+    * Genearte Juicebox visualisation files
+	* BUSCO (contigs/scaffolds)
+
+NOTE: Use the 'assembly_assessment' pipeline to finalise the genome with gap-cloising,
+      followed by a range of QC assessments
 */
 
-// Import pipeline modules - change to './nf-mod...' after it's all tested
+// Import pipeline modules
 include { hifiadapterfilt } from '../nf-modules/hifiadapterfilt/2.0.0/hifiadapterfilt'
 include { seqkit_fq2fa } from '../nf-modules/seqkit/2.1.0/seqkit_fq2fa'
 include { kmc } from '../nf-modules/kmc/3.2.1/kmc'
@@ -25,16 +29,9 @@ include { salsa2 } from '../nf-modules/salsa2/2.3/salsa2'
 include { matlock_bam2 } from '../nf-modules/matlock/20181227/matlock_bam2'
 include { assembly_visualiser as assembly_visualiser_pin_hic } from '../nf-modules/3d_dna/201008/assembly_visualiser'
 include { assembly_visualiser as assembly_visualiser_salsa } from '../nf-modules/3d_dna/201008/assembly_visualiser'
-include { tgsgapcloser } from '../nf-modules/tgs-gapcloser/1.1.1/tgsgapcloser'
 include { busco as busco_contig } from '../nf-modules/busco/5.2.2/busco'
 include { busco as busco_salsa2 } from '../nf-modules/busco/5.2.2/busco'
 include { busco as busco_pin_hic } from '../nf-modules/busco/5.2.2/busco'
-include { busco as busco_scaffold } from '../nf-modules/busco/5.2.2/busco'
-include { busco_plot } from '../nf-modules/busco/5.2.2/busco_plot'
-include { quast } from '../nf-modules/quast/5.0.2/quast'
-include { merqury } from '../nf-modules/merqury/1.3/merqury'
-include { mosdepth } from '../nf-modules/mosdepth/0.3.3/mosdepth'
-include { minimap2_pb_hifi } from '../nf-modules/minimap2/2.24/minimap2_pb_hifi'
 
 // Sub-workflow
 workflow ASSEMBLY {
@@ -46,14 +43,14 @@ workflow ASSEMBLY {
             [ params.input.path, params.input.pattern].join('/'), 
             size: params.input.nfiles
         )
-        .ifEmpty { exit 1, "HiFi Fastq files are empty" }
+        .ifEmpty { exit 1, "HiFi Fastq file channel is empty. Can't find the files..." }
         .set { ch_hifi }
     
     // HifiAdapterFilt: Remove adapters from HiFi
     hifiadapterfilt(ch_hifi, params.outdir)
 
-    // FQ2FA - hifi reads
-    seqkit_fq2fa(hifiadapterfilt.out.hifi_clean, params.outdir)
+    // FQ2FA: hifi reads
+    seqkit_fq2fa(hifiadapterfilt.out.clean, params.outdir)
 
     // Hi-C data + run assembly pipeline
     if (params.containsKey("hic")) {
@@ -64,23 +61,45 @@ workflow ASSEMBLY {
             )
             .set { ch_hic }      
         
-        // Hifiasm - assemble reads into contigs
+        // Hifiasm: assemble reads into contigs
         hifiasm_hic(
-            ch_hifi,
+            hifiadapterfilt.out.clean,
             ch_hic,
             params.outdir
         )
+        
+        // String to match on - not pretty but does the trick
+        switch(params.assembly) {
+            case 'all':
+                pattern = ['p_ctg', 'hap1', 'hap2' ]
+                break;
+            case 'primary':
+                pattern = [ 'p_ctg' ]
+                break;
+            case 'haplotype1':
+                pattern = [ 'hap1' ]
+                break;
+            case 'haplotype2':
+                pattern = [ 'hap2' ]
+                break;
+            case 'haplotypes':
+                pattern = [ 'hap1' ,'hap2' ]
+                break;
+        }
 
-        // Create channel for each haplotype
-        hifiasm_hic.out.hap_fa.flatten().map { val ->
-            return tuple(val.baseName, val)
+        // Filter Hifiasm output channels for only the assemblies we're after
+        hifiasm_hic.out.contigs.flatten().filter{
+            pattern.any { val -> it.baseName.contains(val)}
+        }
+        .map { ctg ->
+            return tuple(ctg.baseName, ctg)
         }
         .set { ch_contigs }
 
-        // BUSCO - contig haplotype assemblies
+        // BUSCO: contig haplotype assemblies
         busco_contig(ch_contigs, params.busco_db, 'contig', params.outdir)
 
-        // Index reference files
+        // BWA2: Index reference files
         bwa_mem2_index(ch_contigs, params.outdir)
         
         // Join haplotype channels with index information
@@ -89,11 +108,11 @@ workflow ASSEMBLY {
         // Combine idx with hic-read channel
         ch_tmp.combine(ch_hic).set { ch_hap_idx_hic }
         
-        // Arima Hi-C processing
+        // Arima Hi-C processing: Remove invalid Hi-C reads
         arima_map_filter_combine(ch_hap_idx_hic, params.outdir)
         arima_dedup_sort(arima_map_filter_combine.out.bam, params.outdir)
 
-        // Convert Hi-C to contig BAM file to 'merged_nodups.txt' file used by juicebox
+        // Maaaaaatlooooooock: Convert Hi-C to contig BAM file to 'merged_nodups.txt' file used by juicebox
         matlock_bam2(arima_dedup_sort.out.hic_to_ctg_bam, params.outdir)
 
         // Combine processed Hi-C reads with genome again - join on genome ID (first field)
@@ -106,6 +125,10 @@ workflow ASSEMBLY {
                 pin_hic(ch_ref_hic, params.outdir)
                 salsa2(ch_ref_hic, params.outdir)
 
+                // BUSCO on scaffolds ---
+                busco_salsa2(salsa2.out.scaffolds, params.busco_db, 'salsa2-scaffolds', params.outdir)
+                busco_pin_hic(pin_hic.out.scaffolds, params.busco_db, 'pin_hic-scaffolds', params.outdir)
+
                 // Combine scaffold agp with matlock output
                 pin_hic.out.juicebox.combine(matlock_bam2.out).set { ch_pin_hic_juicebox }
                 salsa2.out.juicebox.combine(matlock_bam2.out).set { ch_salsa2_juicebox }
@@ -116,19 +139,25 @@ workflow ASSEMBLY {
                 break;
             case 'salsa2':
                 salsa2(ch_ref_hic, params.outdir)
+                
+                // BUSCO on scaffolds ---
+                busco_salsa2(salsa2.out.scaffolds, params.busco_db, 'salsa2-scaffolds', params.outdir)
+                
+                // Generate Juicebox input files ---
                 salsa2.out.juicebox.combine(matlock_bam2.out).set { ch_salsa2_juicebox }
                 assembly_visualiser_salsa(ch_salsa2_juicebox, 'salsa2', params.outdir)
                 break;
             case 'pin_hic':
                 pin_hic(ch_ref_hic, params.outdir)
+                
+                // BUSCO on scaffolds ---
+                busco_pin_hic(pin_hic.out.scaffolds, params.busco_db, 'pin_hic-scaffolds', params.outdir)
+                
+                // Generate Juicebox input files ---
                 pin_hic.out.juicebox.combine(matlock_bam2.out).set { ch_pin_hic_juicebox }
                 assembly_visualiser_pin_hic(ch_pin_hic_juicebox, 'pin_hic', params.outdir)
-                break
+                break;
         }
-
-        // BUSCO on scaffolds ---
-        busco_salsa2(salsa2.out.scaffolds, params.busco_db, 'salsa2-scaffolds', params.outdir)
-        busco_pin_hic(pin_hic.out.scaffolds, params.busco_db, 'pin_hic-scaffolds', params.outdir)
 
         /*
         PIPELINE BREAK: The pipeline should break here for users to edit their genome assemblies.
@@ -137,60 +166,34 @@ workflow ASSEMBLY {
           obvious misjoins.
         */
 
-        // Gap closing: TGS-GapCloser
-        pin_hic.out.scaffolds.combine(seqkit_fq2fa.out).set { ch_scaff_hifi_fa}
-        tgsgapcloser(ch_scaff_hifi_fa, params.outdir, params.scaffolds_checked)
-
-        // Mosdepth - HIFI alignment and coverage
-        tgsgapcloser.out.scaff_detailed.combine(ch_hifi).set { ch_filled_hifi_fq }
-        minimap2_pb_hifi(ch_filled_hifi_fq, params.outdir, params.scaffolds_checked)
-        mosdepth(minimap2_pb_hifi.out, params.outdir, params.scaffolds_checked)
-
-        // K-mer assessment - Merqury
-        tgsgapcloser.out.scaff.collect().toList().combine(ch_hifi).set { ch_filled_hifi }
-        merqury(ch_filled_hifi, params.outdir, params.scaffolds_checked)
-
-        // BUSCO - Scaffold haplotype assemblies
-        busco_scaffold(tgsgapcloser.out.scaff_detailed, params.busco_db, 'gapfilled', params.outdir, params.scaffolds_checked)
-
-        // QUAST - scaffold haplotype assemblies
-        quast(tgsgapcloser.out.scaff.collect(), params.outdir, params.scaffolds_checked)
-
-        // BUSCO plot - Generate a summary plot of the BUSCO results (contig and scaffold)
-        busco_contig.out.summary.concat(busco_scaffold.out.summary).collect().set { ch_busco_short }
-        busco_plot(ch_busco_short, params.outdir, params.scaffolds_checked)
-        
     } else {
-        // TODO: TEST THIS PORTION OF THE PIPELINE
-        // Run the assembly process
+        // Hifiasm: assemble contigs
         hifiasm(
             ch_hifi,
             params.outdir
         )
 
-        // BUSCO - contig primary assembly
-        busco_contig(hifiasm.out.fa, params.busco_db, 'contig', params.outdir)
+        // BUSCO: contig primary assembly
+        busco_contig(hifiasm.out.contigs, params.busco_db, 'contig', params.outdir)
         
-        // BUSCO plot - Generate a summary plot of the BUSCO results
-        busco_plot(busco_contig.out.summary, params.outdir)
+        // BUSCO plot: Generate a summary plot of the BUSCO results
+        // busco_plot(busco_contig.out.summary, params.outdir)
 
-        // K-mer assessment - Compare genome to reads
-        hifiasm.out.fa.map { id, val ->
-            return file(val)
-        }
-        .set { ch_contig }
+        // Merqury: K-mer assessment - Compare genome to reads
+        // hifiasm.out.contigs.map { id, val -> return file(val)}
+        // .set { ch_contig }
 
-        ch_contig.combine(ch_hifi).set { ch_contig_hifi }
+        // ch_contig.combine(ch_hifi).set { ch_contig_hifi }
 
-        merqury(ch_contig_hifi, params.outdir)
+        // merqury(ch_contig_hifi, params.outdir)
 
-        // QUAST - contig primary assembly
-        quast(ch_contig, params.outdir)
+        // // QUAST: contig primary assembly
+        // quast(ch_contig, params.outdir)
 
-        // Mosdepth - HIFI alignment and coverage
-        hifiasm.out.fa.combine(ch_hifi).set { ch_contig_hifi_fq }
-        minimap2_pb_hifi(ch_contig_hifi_fq, params.outdir)
-        mosdepth(minimap2_pb_hifi.out, params.outdir)
+        // // Mosdepth - HIFI alignment and coverage
+        // hifiasm.out.fa.combine(ch_hifi).set { ch_contig_hifi_fq }
+        // minimap2_pb_hifi(ch_contig_hifi_fq, params.outdir)
+        // mosdepth(minimap2_pb_hifi.out, params.outdir)
     }
 
     // Genome size estimation
