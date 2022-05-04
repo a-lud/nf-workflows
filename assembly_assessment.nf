@@ -65,7 +65,7 @@ workflow ASSEMBLY_ASSESSMENT {
             .fromPath(
                 [params.filtered_hifi.path, params.filtered_hifi.pattern].join('/'),
             )
-            .ifEmpty { exit 1, "Can't find filtered datasets"}
+            .ifEmpty { exit 1, "Can't find filtered HiFi datasets"}
             .branch {
                 fastq: it.baseName.contains('filt')
                 fasta: it.baseName.contains('fasta')
@@ -111,8 +111,7 @@ workflow ASSEMBLY_ASSESSMENT {
         // QUAST - scaffold haplotype assemblies
         quast(tgsgapcloser.out.asm_fa.collect(), params.outdir)
 
-        // TODO: Figure out a good way to get BUSCO plot to work with all outputs so far
         // BUSCO plot: Generate a summary plot of the BUSCO results (contig and scaffold)
         // busco_contig.out.summary.concat(busco_tgs.out.summary).collect().set { ch_busco_short }
-        // busco_plot(ch_busco_short, params.outdir, params.scaffolds_checked)
+        // busco_plot(ch_busco_short, params.outdir + 'post-assembly-qc/busco')
 }
