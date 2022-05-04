@@ -9,7 +9,7 @@ Genome assembly pipeline
     * Genearte Juicebox visualisation files
 	* BUSCO (contigs/scaffolds)
 
-NOTE: Use the 'assembly_assessment' pipeline to finalise the genome with gap-cloising,
+NOTE: Use the 'assembly_assessment' pipeline to finalise the genome with gap-closing,
       followed by a range of QC assessments
 */
 
@@ -40,8 +40,8 @@ workflow ASSEMBLY {
     // HiFi Data
     Channel
         .fromFilePairs(
-            [ params.input.path, params.input.pattern].join('/'), 
-            size: params.input.nfiles
+            [ params.hifi.path, params.hifi.pattern].join('/'), 
+            size: params.hifi.nfiles
         )
         .ifEmpty { exit 1, "HiFi Fastq file channel is empty. Can't find the files..." }
         .set { ch_hifi }
@@ -59,12 +59,13 @@ workflow ASSEMBLY {
                 [params.hic.path, params.hic.pattern].join('/'),
                 size: params.hic.nfiles
             )
-            .set { ch_hic }      
+            .set { ch_hic }
         
         // Hifiasm: assemble reads into contigs
         hifiasm_hic(
             hifiadapterfilt.out.clean,
             ch_hic,
+            params.out_prefix,
             params.outdir
         )
         
@@ -88,7 +89,8 @@ workflow ASSEMBLY {
         }
 
         // Filter Hifiasm output channels for only the assemblies we're after
-        hifiasm_hic.out.contigs.flatten().filter{
+        // hifiasm_hic.out.contigs.flatten().filter{ // TODO: CHange back
+        ch_tmp_asm.flatten().filter{
             pattern.any { val -> it.baseName.contains(val)}
         }
         .map { ctg ->
@@ -96,24 +98,24 @@ workflow ASSEMBLY {
         }
         .set { ch_contigs }
 
-        // BUSCO: contig haplotype assemblies
+        // BUSCO: contig assemblies
         busco_contig(ch_contigs, params.busco_db, 'contig', params.outdir)
 
         // BWA2: Index reference files
         bwa_mem2_index(ch_contigs, params.outdir)
         
-        // Join haplotype channels with index information
+        // Join contig channels with index information
         ch_contigs.join(bwa_mem2_index.out.fai.join(bwa_mem2_index.out.bwa_idx)).set { ch_tmp }
 
         // Combine idx with hic-read channel
         ch_tmp.combine(ch_hic).set { ch_hap_idx_hic }
         
         // Arima Hi-C processing: Remove invalid Hi-C reads
-        arima_map_filter_combine(ch_hap_idx_hic, params.outdir)
-        arima_dedup_sort(arima_map_filter_combine.out.bam, params.outdir)
+        arima_map_filter_combine(ch_hap_idx_hic)
+        arima_dedup_sort(arima_map_filter_combine.out.bam)
 
         // Maaaaaatlooooooock: Convert Hi-C to contig BAM file to 'merged_nodups.txt' file used by juicebox
-        matlock_bam2(arima_dedup_sort.out.hic_to_ctg_bam, params.outdir)
+        matlock_bam2(arima_dedup_sort.out.hic_to_ctg_bam)
 
         // Combine processed Hi-C reads with genome again - join on genome ID (first field)
         ch_contigs.join(arima_dedup_sort.out.bam).set { ch_ref_hic }
@@ -126,12 +128,12 @@ workflow ASSEMBLY {
                 salsa2(ch_ref_hic, params.outdir)
 
                 // BUSCO on scaffolds ---
-                busco_salsa2(salsa2.out.scaffolds, params.busco_db, 'salsa2-scaffolds', params.outdir)
-                busco_pin_hic(pin_hic.out.scaffolds, params.busco_db, 'pin_hic-scaffolds', params.outdir)
+                busco_salsa2(salsa2.out.scaffolds, params.busco_db, 'scaffold-salsa2', params.outdir)
+                busco_pin_hic(pin_hic.out.scaffolds, params.busco_db, 'scaffold-pin_hic', params.outdir)
 
-                // Combine scaffold agp with matlock output
-                pin_hic.out.juicebox.combine(matlock_bam2.out).set { ch_pin_hic_juicebox }
-                salsa2.out.juicebox.combine(matlock_bam2.out).set { ch_salsa2_juicebox }
+                // Join scaffold agp with matlock output
+                pin_hic.out.juicebox.join(matlock_bam2.out).set { ch_pin_hic_juicebox }
+                salsa2.out.juicebox.join(matlock_bam2.out).set { ch_salsa2_juicebox }
 
                 // Create Juicebox files
                 assembly_visualiser_pin_hic(ch_pin_hic_juicebox, 'pin_hic', params.outdir)
@@ -141,20 +143,20 @@ workflow ASSEMBLY {
                 salsa2(ch_ref_hic, params.outdir)
                 
                 // BUSCO on scaffolds ---
-                busco_salsa2(salsa2.out.scaffolds, params.busco_db, 'salsa2-scaffolds', params.outdir)
+                busco_salsa2(salsa2.out.scaffolds, params.busco_db, 'scaffold-salsa2', params.outdir)
                 
                 // Generate Juicebox input files ---
-                salsa2.out.juicebox.combine(matlock_bam2.out).set { ch_salsa2_juicebox }
+                salsa2.out.juicebox.join(matlock_bam2.out).set { ch_salsa2_juicebox }
                 assembly_visualiser_salsa(ch_salsa2_juicebox, 'salsa2', params.outdir)
                 break;
             case 'pin_hic':
                 pin_hic(ch_ref_hic, params.outdir)
                 
                 // BUSCO on scaffolds ---
-                busco_pin_hic(pin_hic.out.scaffolds, params.busco_db, 'pin_hic-scaffolds', params.outdir)
+                busco_pin_hic(pin_hic.out.scaffolds, params.busco_db, 'scaffold-pin_hic', params.outdir)
                 
                 // Generate Juicebox input files ---
-                pin_hic.out.juicebox.combine(matlock_bam2.out).set { ch_pin_hic_juicebox }
+                pin_hic.out.juicebox.join(matlock_bam2.out).set { ch_pin_hic_juicebox }
                 assembly_visualiser_pin_hic(ch_pin_hic_juicebox, 'pin_hic', params.outdir)
                 break;
         }
@@ -170,6 +172,7 @@ workflow ASSEMBLY {
         // Hifiasm: assemble contigs
         hifiasm(
             ch_hifi,
+            params.out_prefix,
             params.outdir
         )
 
@@ -197,6 +200,6 @@ workflow ASSEMBLY {
     }
 
     // Genome size estimation
-    kmc(ch_hifi, params.outdir)
+    kmc(ch_hifi, params.out_prefix, params.outdir)
     genomescope(kmc.out.histo, params.outdir)
 }
