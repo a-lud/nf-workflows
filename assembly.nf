@@ -89,8 +89,7 @@ workflow ASSEMBLY {
         }
 
         // Filter Hifiasm output channels for only the assemblies we're after
-        // hifiasm_hic.out.contigs.flatten().filter{ // TODO: CHange back
-        ch_tmp_asm.flatten().filter{
+        hifiasm_hic.out.contigs.flatten().filter{
             pattern.any { val -> it.baseName.contains(val)}
         }
         .map { ctg ->
