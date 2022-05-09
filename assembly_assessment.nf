@@ -1,6 +1,7 @@
 include { juicebox_assembly_converter } from '../nf-modules/phaseGenomics/1.0.0/juicebox_assembly_converter'
 include { tgsgapcloser } from '../nf-modules/tgs-gapcloser/1.1.1/tgsgapcloser'
 include { busco as busco_tgs } from '../nf-modules/busco/5.2.2/busco'
+include { busco_plot } from '../nf-modules/busco/5.2.2/busco_plot'
 include { quast } from '../nf-modules/quast/5.0.2/quast'
 include { meryl } from '../nf-modules/meryl/1.3/meryl'
 include { merqury } from '../nf-modules/merqury/1.3/merqury'
@@ -8,7 +9,6 @@ include { merqury_haplotypes } from '../nf-modules/merqury/1.3/merqury'
 include { mosdepth } from '../nf-modules/mosdepth/0.3.3/mosdepth'
 include { minimap2_pb_hifi } from '../nf-modules/minimap2/2.24/minimap2_pb_hifi'
 
-// include { busco_plot } from '../nf-modules/busco/5.2.2/busco_plot'
 
 workflow ASSEMBLY_ASSESSMENT {
     main:
@@ -138,7 +138,22 @@ workflow ASSEMBLY_ASSESSMENT {
         // QUAST - scaffold haplotype assemblies
         quast(tgsgapcloser.out.asm_fa.collect(), params.outdir)
 
-        // BUSCO plot: Generate a summary plot of the BUSCO results (contig and scaffold)
-        // busco_contig.out.summary.concat(busco_tgs.out.summary).collect().set { ch_busco_short }
-        // busco_plot(ch_busco_short, params.outdir + 'post-assembly-qc/busco')
+        // Plot BUSCO results
+        def pth = new File(params.outdir + '/post-assembly-qc/busco')
+        if(pth.exists()) {
+            Channel
+                .fromPath(params.outdir + '/post-assembly-qc/busco/**/short_summary*', maxDepth: 1)
+                .set { ch_busco_existing }
+            
+            // Join existing busco results with TGS-busco results
+            busco_tgs.out.summary
+                .concat(ch_busco_existing)
+                .unique()
+                .collect()
+                .set { ch_busco_short }
+
+            busco_plot(ch_busco_short, params.outdir)
+        } else {
+            busco_plot(busco_tgs.out.summary.collect(), params.outdir)
+        }
 }
