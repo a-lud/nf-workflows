@@ -2,7 +2,9 @@ include { juicebox_assembly_converter } from '../nf-modules/phaseGenomics/1.0.0/
 include { tgsgapcloser } from '../nf-modules/tgs-gapcloser/1.1.1/tgsgapcloser'
 include { busco as busco_tgs } from '../nf-modules/busco/5.2.2/busco'
 include { quast } from '../nf-modules/quast/5.0.2/quast'
+include { meryl } from '../nf-modules/meryl/1.3/meryl'
 include { merqury } from '../nf-modules/merqury/1.3/merqury'
+include { merqury_haplotypes } from '../nf-modules/merqury/1.3/merqury'
 include { mosdepth } from '../nf-modules/mosdepth/0.3.3/mosdepth'
 include { minimap2_pb_hifi } from '../nf-modules/minimap2/2.24/minimap2_pb_hifi'
 
@@ -101,9 +103,34 @@ workflow ASSEMBLY_ASSESSMENT {
         minimap2_pb_hifi(ch_asm_hifi)
         mosdepth(minimap2_pb_hifi.out, params.outdir)
 
+        // Branch into haplotype/primary channels
+        tgsgapcloser.out.asm_fa
+            .branch{ val ->
+                primary: val.baseName.contains('-p_ctg')
+                haplotype: val.baseName.find('-hap?')
+            }
+            .set {ch_asm}
+
         // Merqury: K-mer assessment
-        tgsgapcloser.out.asm_fa.collect().toList().combine(ch_hifi.fastq).set { ch_filled_hifi }
-        merqury(ch_filled_hifi, params.outdir)
+        meryl(ch_hifi.fastq)
+        switch(params.assembly) {
+            case 'all':
+                merqury(ch_asm.primary, meryl.out, params.outdir)
+                merqury_haplotypes(ch_asm.haplotype.collect(), meryl.out, params.outdir)
+                break;
+            case 'primary':
+                merqury(ch_asm.primary, meryl.out, params.outdir)
+                break;
+            case 'haplotype1':
+                merqury(ch_asm.haplotype, meryl.out, params.outdir)
+                break;
+            case 'haplotype2':
+                merqury(ch_asm.haplotype, meryl.out, params.outdir)
+                break;
+            case 'haplotypes':
+                merqury_haplotypes(ch_asm.haplotype.collect(), meryl.out, params.outdir)
+                break;
+        }
 
         // BUSCO: Scaffold haplotype assemblies
         busco_tgs(tgsgapcloser.out.asm, params.busco_db, 'gapfilled', params.outdir)
