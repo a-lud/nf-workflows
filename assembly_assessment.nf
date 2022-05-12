@@ -97,10 +97,15 @@ workflow ASSEMBLY_ASSESSMENT {
         juicebox_assembly_converter.out.manual.combine(ch_hifi.fasta).set { ch_scaf_hifi }
         tgsgapcloser(ch_scaf_hifi, params.outdir)
 
-        // Mosdepth: HIFI alignment and coverage
+        // Align reads to assemblie(s)
         tgsgapcloser.out.asm.combine(ch_hifi.fastq).set { ch_asm_hifi }
         minimap2_pb_hifi(ch_asm_hifi)
-        mosdepth(minimap2_pb_hifi.out, params.outdir)
+
+        // Alignment statistics
+        flagstat(minimap2_pb_hifi.out.flagstat, params.outdir)
+        
+        // Mosdepth: HIFI alignment and coverage
+        mosdepth(minimap2_pb_hifi.out.mosdepth, params.outdir)
 
         // Branch into haplotype/primary channels
         tgsgapcloser.out.asm_fa
