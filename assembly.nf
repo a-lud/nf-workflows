@@ -102,12 +102,9 @@ workflow ASSEMBLY {
 
         // BWA2: Index reference files
         bwa_mem2_index(ch_contigs, params.outdir)
-        
-        // Join contig channels with index information
-        ch_contigs.join(bwa_mem2_index.out.fai.join(bwa_mem2_index.out.bwa_idx)).set { ch_tmp }
 
         // Combine idx with hic-read channel
-        ch_tmp.combine(ch_hic).set { ch_hap_idx_hic }
+        bwa_mem2_index.out.combine(ch_hic).set { ch_hap_idx_hic }
         
         // Arima Hi-C processing: Remove invalid Hi-C reads
         arima_map_filter_combine(ch_hap_idx_hic)
