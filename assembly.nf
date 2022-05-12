@@ -28,7 +28,7 @@ include { pin_hic } from '../nf-modules/pin_hic/3.0.0/pin_hic'
 include { salsa2 } from '../nf-modules/salsa2/2.3/salsa2'
 include { matlock_bam2 } from '../nf-modules/matlock/20181227/matlock_bam2'
 include { assembly_visualiser as assembly_visualiser_pin_hic } from '../nf-modules/3d_dna/201008/assembly_visualiser'
-include { assembly_visualiser as assembly_visualiser_salsa } from '../nf-modules/3d_dna/201008/assembly_visualiser'
+include { assembly_visualiser as assembly_visualiser_salsa2 } from '../nf-modules/3d_dna/201008/assembly_visualiser'
 include { busco as busco_contig } from '../nf-modules/busco/5.2.2/busco'
 include { busco as busco_salsa2 } from '../nf-modules/busco/5.2.2/busco'
 include { busco as busco_pin_hic } from '../nf-modules/busco/5.2.2/busco'
@@ -136,7 +136,7 @@ workflow ASSEMBLY {
 
                 // Create Juicebox files
                 assembly_visualiser_pin_hic(ch_pin_hic_juicebox, 'pin_hic', params.outdir)
-                assembly_visualiser_salsa(ch_salsa2_juicebox, 'salsa2', params.outdir)
+                assembly_visualiser_salsa2(ch_salsa2_juicebox, 'salsa2', params.outdir)
                 break;
             case 'salsa2':
                 salsa2(ch_ref_hic, params.outdir)
@@ -146,7 +146,7 @@ workflow ASSEMBLY {
                 
                 // Generate Juicebox input files ---
                 salsa2.out.juicebox.join(matlock_bam2.out).set { ch_salsa2_juicebox }
-                assembly_visualiser_salsa(ch_salsa2_juicebox, 'salsa2', params.outdir)
+                assembly_visualiser_salsa2(ch_salsa2_juicebox, 'salsa2', params.outdir)
                 break;
             case 'pin_hic':
                 pin_hic(ch_ref_hic, params.outdir)
