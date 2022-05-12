@@ -9,7 +9,6 @@ include { merqury_haplotypes } from '../nf-modules/merqury/1.3/merqury'
 include { mosdepth } from '../nf-modules/mosdepth/0.3.3/mosdepth'
 include { minimap2_pb_hifi } from '../nf-modules/minimap2/2.24/minimap2_pb_hifi'
 
-
 workflow ASSEMBLY_ASSESSMENT {
     main:
 
