@@ -8,6 +8,7 @@ include { merqury } from '../nf-modules/merqury/1.3/merqury'
 include { merqury_haplotypes } from '../nf-modules/merqury/1.3/merqury'
 include { mosdepth } from '../nf-modules/mosdepth/0.3.3/mosdepth'
 include { minimap2_pb_hifi } from '../nf-modules/minimap2/2.24/minimap2_pb_hifi'
+include { flagstat } from '../nf-modules/samtools/1.15/flagstat'
 
 workflow ASSEMBLY_ASSESSMENT {
     main:
@@ -148,16 +149,16 @@ workflow ASSEMBLY_ASSESSMENT {
             Channel
                 .fromPath(params.outdir + '/post-assembly-qc/busco/**/short_summary*', maxDepth: 1)
                 .set { ch_busco_existing }
-            
-            // Join existing busco results with TGS-busco results
-            busco_tgs.out.summary
-                .concat(ch_busco_existing)
-                .unique()
-                .collect()
-                .set { ch_busco_short }
 
-            busco_plot(ch_busco_short, params.outdir)
         } else {
-            busco_plot(busco_tgs.out.summary.collect(), params.outdir)
+            Channel.empty().set { ch_busco_existing }
         }
+
+        // Join existing busco results with TGS-busco results
+        busco_tgs.out.summary
+            .concat(ch_busco_existing)
+            .collect()
+            .set { ch_busco_short }
+
+        busco_plot(ch_busco_short, params.outdir)
 }
