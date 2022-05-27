@@ -1,3 +1,16 @@
+/*
+Genome assembly assessment pipeline
+    * PhaseGenomics: Convert Juicebox-edited '.assembly' files to sequence files
+    * TGS-GapCloser: Close gaps with HiFi data
+    * Flagstat: HiFi alignment statistics
+    * MosDepth: Hifi coverage statistics
+    * Meryl: K-mer composition assessment
+    * BUSCO: Gene content assessment on gap-filled assembly
+    * QUAST: Simple assembly metrics
+
+NOTE: This pipeline assumes the input comes from the 'assembly' pipeline.
+*/
+
 include { juicebox_assembly_converter } from '../nf-modules/phaseGenomics/1.0.0/juicebox_assembly_converter'
 include { tgsgapcloser } from '../nf-modules/tgs-gapcloser/1.1.1/tgsgapcloser'
 include { busco as busco_tgs } from '../nf-modules/busco/5.2.2/busco'
