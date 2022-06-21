@@ -23,7 +23,6 @@ include { hifiasm_hic } from '../nf-modules/hifiasm/0.16.1/hifiasm-hic'
 include { bwa_mem2_index } from "../nf-modules/bwa-mem2/2.2.1/bwa-mem2-index"
 include { arima_map_filter_combine } from "../nf-modules/arima/1.0.0/arima_map_filter_combine"
 include { arima_dedup_sort } from '../nf-modules/arima/1.0.0/arima_dedup_sort'
-include { bwa_mem2_mem } from "../nf-modules/bwa-mem2/2.2.1/bwa-mem2-mem"
 include { pin_hic } from '../nf-modules/pin_hic/3.0.0/pin_hic'
 include { salsa2 } from '../nf-modules/salsa2/2.3/salsa2'
 include { matlock_bam2 } from '../nf-modules/matlock/20181227/matlock_bam2'
