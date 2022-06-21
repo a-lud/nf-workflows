@@ -1,41 +1,37 @@
 /*
 CodeML pipeline
-    * Conduct selection analyses using CodeML from the PAML package
+    * Selection testing using ETE3 evol's CodeML implementation
 */
 
-// Import utility functions
-include {checkCodemlArgs;printCodemlArgs} from '../lib/utils'
-
-// Import utility functions
+// Import pipeline functions
 include { codeml } from '../nf-modules/ete3/3.1.2/codeml'
-
-// Check data
-checked = checkCodemlArgs(params)
-printCodemlArgs(checked, params.pipeline)
 
 // Sub-workflow
 workflow CODEML {
     main:
 
-    files_path = params.files_dir + '/' + params.files_ext
+    // Get MSA fasta files
     Channel
-        .fromFilePairs(files_path, size: 1)
-        .ifEmpty { exit 1, "Can't import files at ${files_path}" }
-        .set { ch_aln }
+        .fromFilePairs(
+            [params.msa.path, params.msa.pattern].join('/'),
+            size: params.msa.nfiles,
+        )
+        .ifEmpty { exit 1, "Can't find MSA files." }
+        .set { ch_msa }
     
+    // Get tree file
     Channel
-        .fromPath(checked.trees)
-        .ifEmpty { exit 1, "Can't import tree files" }
+        .fromPath(
+            params.tree
+        )
+        .ifEmpty { exit 1, "Can't import tree file" }
         .set { ch_tree }
     
-    ch_aln
-        .combine( ch_tree )
-        .set { ch_seq_tree }
+    // Combine MSA files with tree file
+    ch_msa.combine(ch_tree).set { ch_msa_tree }
 
     // Run codeml
-    codeml(ch_seq_tree,
-           checked.models,
-           checked.tests,
-           checked.codeml_optional,
+    codeml(ch_msa_tree,
+           params.models,
            params.outdir)
 }
