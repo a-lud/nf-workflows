@@ -42,31 +42,34 @@ workflow QC {
         params.length_required :
         15
 
+    // out_prefix is used as a parent directory. Adjust the outdir variable
+    def outdir = [params.outdir, params.out_prefix].join('/')
+
+    // Introductory text for MQC report
+    def intro = 'intro_text: Nextflow QC pipeline. Aggregation of FastQC, Kraken2 and Fastp results'
+
     // FastQC
     fastqc(
         ch_reads,
-        params.out_prefix,
-        params.outdir
+        outdir
     )
 
     // Kraken filtering
     kraken2(
         ch_reads,
-        params.out_prefix,
         params.krakendb,
-        params.outdir
+        outdir
     )
 
     // Fastp
     fastp_paired(
         kraken2.out.unclassified,
-        params.out_prefix,
         params.platform,
         bq_phred,
         n_base_limit,
         average_qual,
         length_required,
-        params.outdir
+        outdir
     )
 
     // Collect all the files and pass to multiqc
@@ -74,12 +77,13 @@ workflow QC {
     kraken2.out.report.collect().set { ch_kr2 }
     fastp_paired.out.json.collect().set { ch_fp }
 
+    // Concat all the channels so a single input can be passed to multiqc
+    ch_fqc.concat(ch_kr2, ch_fp).collect().set { ch_multiqc }
+
     // Generate MultiQC report
     multiqc(
-        ch_fqc,
-        ch_kr2,
-        ch_fp,
-        params.out_prefix,
-        params.outdir
+        ch_multiqc,
+        intro,
+        outdir
     )
 }
