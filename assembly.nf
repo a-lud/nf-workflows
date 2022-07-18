@@ -36,6 +36,13 @@ include { busco as busco_pin_hic } from '../nf-modules/busco/5.2.2/busco'
 workflow ASSEMBLY {
     main:
 
+    // Output directory paths
+    out_filteredreads = params.outdir + '/adapter-removed-reads'
+    out_hifiasm = params.outdir + '/assembly-contigs/' + params.out_prefix
+    out_busco = params.outdir + '/qc/busco'
+    out_scaffold = params.outdir + '/assembly-scaffold'
+    out_genomescope = params.outdir + '/genome-size'
+
     // HiFi Data
     Channel
         .fromFilePairs(
@@ -46,10 +53,16 @@ workflow ASSEMBLY {
         .set { ch_hifi }
     
     // HifiAdapterFilt: Remove adapters from HiFi
-    hifiadapterfilt(ch_hifi, params.outdir)
+    hifiadapterfilt(
+        ch_hifi,
+        out_filteredreads
+    )
 
-    // FQ2FA: hifi reads
-    seqkit_fq2fa(hifiadapterfilt.out.clean, params.outdir)
+    // // FQ2FA: hifi reads
+    seqkit_fq2fa(
+        hifiadapterfilt.out.clean, 
+        out_filteredreads
+    )
 
     // Hi-C data + run assembly pipeline
     if (params.containsKey("hic")) {
@@ -65,7 +78,7 @@ workflow ASSEMBLY {
             hifiadapterfilt.out.clean,
             ch_hic,
             params.out_prefix,
-            params.outdir
+            out_hifiasm
         )
         
         // String to match on - not pretty but does the trick
@@ -97,15 +110,22 @@ workflow ASSEMBLY {
         .set { ch_contigs }
 
         // BUSCO: contig assemblies
-        busco_contig(ch_contigs, params.busco_db, 'contig', params.outdir)
+        busco_contig(
+            ch_contigs,
+            params.busco_db,
+            'contig',
+            out_busco
+        )
 
         // BWA2: Index reference files
-        bwa_mem2_index(ch_contigs, params.outdir)
+        bwa_mem2_index(
+            ch_contigs
+        )
 
         // Combine idx with hic-read channel
         bwa_mem2_index.out.combine(ch_hic).set { ch_hap_idx_hic }
         
-        // Arima Hi-C processing: Remove invalid Hi-C reads
+        // Arima Hi-C processing: Align + filter hic reads
         arima_map_filter_combine(ch_hap_idx_hic)
         arima_dedup_sort(arima_map_filter_combine.out.bam)
 
@@ -119,40 +139,76 @@ workflow ASSEMBLY {
         switch(params.scaffolder) {
             case 'all':
                 // Scaffold
-                pin_hic(ch_ref_hic, params.outdir)
-                salsa2(ch_ref_hic, params.outdir)
+                pin_hic(ch_ref_hic, out_scaffold)
+                salsa2(ch_ref_hic, out_scaffold)
 
                 // BUSCO on scaffolds ---
-                busco_salsa2(salsa2.out.scaffolds, params.busco_db, 'scaffold-salsa2', params.outdir)
-                busco_pin_hic(pin_hic.out.scaffolds, params.busco_db, 'scaffold-pin_hic', params.outdir)
+                busco_salsa2(
+                    salsa2.out.scaffolds,
+                    params.busco_db,
+                    'scaffold-salsa2',
+                    out_busco
+                )
+                busco_pin_hic(
+                    pin_hic.out.scaffolds,
+                    params.busco_db,
+                    'scaffold-pin_hic',
+                    out_busco
+                )
 
                 // Join scaffold agp with matlock output
                 pin_hic.out.juicebox.join(matlock_bam2.out).set { ch_pin_hic_juicebox }
                 salsa2.out.juicebox.join(matlock_bam2.out).set { ch_salsa2_juicebox }
 
                 // Create Juicebox files
-                assembly_visualiser_pin_hic(ch_pin_hic_juicebox, 'pin_hic', params.outdir)
-                assembly_visualiser_salsa2(ch_salsa2_juicebox, 'salsa2', params.outdir)
+                assembly_visualiser_pin_hic(
+                    ch_pin_hic_juicebox, 
+                    'pin_hic',
+                    out_scaffold
+                )
+                assembly_visualiser_salsa2(
+                    ch_salsa2_juicebox,
+                    'salsa2', 
+                    out_scaffold
+                )
                 break;
             case 'salsa2':
-                salsa2(ch_ref_hic, params.outdir)
+                salsa2(ch_ref_hic, out_scaffold)
                 
                 // BUSCO on scaffolds ---
-                busco_salsa2(salsa2.out.scaffolds, params.busco_db, 'scaffold-salsa2', params.outdir)
+                busco_salsa2(
+                    salsa2.out.scaffolds,
+                    params.busco_db,
+                    'scaffold-salsa2',
+                    out_busco
+                )
                 
                 // Generate Juicebox input files ---
                 salsa2.out.juicebox.join(matlock_bam2.out).set { ch_salsa2_juicebox }
-                assembly_visualiser_salsa2(ch_salsa2_juicebox, 'salsa2', params.outdir)
+                assembly_visualiser_salsa2(
+                    ch_salsa2_juicebox,
+                    'salsa2',
+                    out_scaffold
+                )
                 break;
             case 'pin_hic':
-                pin_hic(ch_ref_hic, params.outdir)
+                pin_hic(ch_ref_hic, out_scaffold)
                 
                 // BUSCO on scaffolds ---
-                busco_pin_hic(pin_hic.out.scaffolds, params.busco_db, 'scaffold-pin_hic', params.outdir)
+                busco_pin_hic(
+                    pin_hic.out.scaffolds,
+                    params.busco_db,
+                    'scaffold-pin_hic',
+                    out_busco
+                )
                 
                 // Generate Juicebox input files ---
                 pin_hic.out.juicebox.join(matlock_bam2.out).set { ch_pin_hic_juicebox }
-                assembly_visualiser_pin_hic(ch_pin_hic_juicebox, 'pin_hic', params.outdir)
+                assembly_visualiser_pin_hic(
+                    ch_pin_hic_juicebox,
+                    'pin_hic',
+                    out_scaffold
+                )
                 break;
         }
 
@@ -168,11 +224,16 @@ workflow ASSEMBLY {
         hifiasm(
             ch_hifi,
             params.out_prefix,
-            params.outdir
+            out_hifiasm
         )
 
         // BUSCO: contig primary assembly
-        busco_contig(hifiasm.out.contigs, params.busco_db, 'contig', params.outdir)
+        busco_contig(
+            hifiasm.out.contigs,
+            params.busco_db,
+            'contig',
+            out_busco
+        )
         
         // BUSCO plot: Generate a summary plot of the BUSCO results
         // busco_plot(busco_contig.out.summary, params.outdir)
@@ -195,6 +256,6 @@ workflow ASSEMBLY {
     }
 
     // Genome size estimation
-    kmc(ch_hifi, params.out_prefix, params.outdir)
-    genomescope(kmc.out.histo, params.outdir)
+    kmc(ch_hifi, params.out_prefix)
+    genomescope(kmc.out.histo, out_genomescope)
 }
