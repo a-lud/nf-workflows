@@ -141,22 +141,21 @@ workflow ALIGNMENT {
     // Depth statistics
     mosdepth(
         markdup.out.bam,
-        outdir
+        outdir + '/qc/mosdepth'
     )
 
     // Alignment statistics
     flagstat(
         markdup.out.bam.map { val -> val[1]},
-        outdir
+        outdir + '/qc/alignment-statistics'
     )
 
     // Aggregate all summary channels into a single data channel
     markdup.out.multiqc.collect().combine(mosdepth.out.multiqc.collect().combine(flagstat.out.multiqc.collect())).collect().set { ch_multiqc }
 
-
     multiqc(
         ch_multiqc,
         intro,
-        outdir
+        outdir + '/qc/mosdepth'
     )
 }
