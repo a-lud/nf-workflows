@@ -68,7 +68,7 @@ workflow ORTHOFINDER {
     agat_extract_seq.out.protein.collect().set { ch_proteins }
     
     // Find orthologs with OrthoFinder
-    orthofinder(ch_proteins, params.search_prog, outdir)
+    orthofinder(ch_proteins, params.search_prog, params.stop_early, outdir)
 
     // Generate codon MSA files from protein alignments
     agat_extract_seq.out.nucleotide.collect().set { ch_nucleotide }
