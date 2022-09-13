@@ -55,6 +55,10 @@ workflow ORTHOFINDER {
         .ifEmpty { exit 1, "Can't find genome files." }
         .set { ch_asm }
 
+    // Optional arguments for OrthoFinder
+    def trim_msa = (params.containsKey('trim_msa') && params.trim_msa) ? '' : '-z'
+    def stop_early = (params.containsKey('stop_early') && params.stop_early ) ? '' : '-oa'
+
     // Statistics channel
     ch_gffs.join(ch_asm).set { ch_statistics }
     agat_statistics(ch_statistics, outdir)
@@ -68,7 +72,13 @@ workflow ORTHOFINDER {
     agat_extract_seq.out.protein.collect().set { ch_proteins }
     
     // Find orthologs with OrthoFinder
-    orthofinder(ch_proteins, params.search_prog, params.stop_early, outdir)
+    orthofinder(
+        ch_proteins, 
+        params.search_prog,
+        stop_early, 
+        trim_msa,
+        outdir
+    )
 
     // Generate codon MSA files from protein alignments
     agat_extract_seq.out.nucleotide.collect().set { ch_nucleotide }
