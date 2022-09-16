@@ -49,7 +49,7 @@ workflow ASSEMBLY {
             [ params.hifi.path, params.hifi.pattern].join('/'), 
             size: params.hifi.nfiles
         )
-        .ifEmpty { exit 1, "HiFi Fastq file channel is empty. Can't find the files..." }
+        .ifEmpty { exit 1, "Long-read fastq file channel is empty. Can't find the files..." }
         .set { ch_hifi }
     
     // HifiAdapterFilt: Remove adapters from HiFi
