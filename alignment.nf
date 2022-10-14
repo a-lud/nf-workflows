@@ -71,8 +71,7 @@ workflow ALIGNMENT {
 
         // Index reference files [ ref.basename, [fai], [bwa2 idx files] ]
         bwa_mem2_index(
-            ch_ref,
-            outdir
+            ch_ref
         )
 
         // Join CSV data with index reference
@@ -156,6 +155,6 @@ workflow ALIGNMENT {
     multiqc(
         ch_multiqc,
         intro,
-        outdir + '/qc/mosdepth'
+        outdir + '/qc/multiqc'
     )
 }
