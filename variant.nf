@@ -87,9 +87,9 @@ workflow VARIANT {
     */
 
     file(outtmp).mkdirs()
+    def removeThis = new File("${outtmp}")
     def junkFile = new File("${outtmp}/no_regions")
     junkFile.createNewFile()
-    // no_regions = file("${outtmp}/no_regions")
 
     /*
     Sort out the input data channels
@@ -161,7 +161,6 @@ workflow VARIANT {
                         return tuple(id, b[0][0])
                     }
                     return tuple(id, file("${outtmp}/no_regions"))
-                    // return tuple(id, no_regions)
                 }
                 .set { ch_dummy }
 
@@ -175,7 +174,6 @@ workflow VARIANT {
                 .join(ch_r, by: 0, remainder: true)
                 .map {
                     it[2] = it[2] ?: file("${outtmp}/no_regions")
-                    // it[2] = it[2] ?: no_regions
                     return it
                 }
                 .set { ch_regions }
@@ -192,7 +190,6 @@ workflow VARIANT {
             ch_ref
                 .map {
                     tuple(it[0], it[1], null, file("${outtmp}/no_regions"))
-                    // tuple(it[0], it[1], null, no_regions)
                 }
                 .set { ch_regions }
 
@@ -200,7 +197,6 @@ workflow VARIANT {
             ch_ref
                 .map {
                     tuple(it[0], it[1], file("${outtmp}/no_regions"))
-                    // tuple(it[0], it[1], no_regions))
                 }
                 .set { ch_regions }
         }
@@ -407,5 +403,10 @@ workflow VARIANT {
             ch_vcfs,
             outcat
         )
+    }
+
+    // Remove temp directory on complete
+    workflow.onComplete {
+        removeThis.deleteDir()
     }
 }
