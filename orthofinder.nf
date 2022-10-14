@@ -56,8 +56,9 @@ workflow ORTHOFINDER {
         .set { ch_asm }
 
     // Optional arguments for OrthoFinder
+    def tree = (params.containsKey('tree') && params.tree) ? "-s " + params.tree : ''
     def trim_msa = (params.containsKey('trim_msa') && params.trim_msa) ? '' : '-z'
-    def stop_early = (params.containsKey('stop_early') && params.stop_early ) ? '' : '-oa'
+    def stop_early = (params.containsKey('stop_early') && params.stop_early ) ? '-oa' : ''
 
     // Statistics channel
     ch_gffs.join(ch_asm).set { ch_statistics }
@@ -75,6 +76,7 @@ workflow ORTHOFINDER {
     orthofinder(
         ch_proteins, 
         params.search_prog,
+        tree,
         stop_early, 
         trim_msa,
         outdir
