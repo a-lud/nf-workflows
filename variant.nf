@@ -13,6 +13,7 @@ include { joint_mpileup_call } from '../nf-modules/bcftools/1.15.1/joint_mpileup
 include { standard_mpileup_call } from '../nf-modules/bcftools/1.15.1/standard_mpileup_call'
 include { joint_filter } from '../nf-modules/bcftools/1.15.1/joint_filter'
 include { standard_filter } from '../nf-modules/bcftools/1.15.1/standard_filter'
+include { concat } from '../nf-modules/bcftools/1.15.1/concat'
 
 // Sub-workflow
 workflow VARIANT {
@@ -78,6 +79,7 @@ workflow VARIANT {
     def outcov = [outdir, 'coverage-stats'].join('/')
     def outvcf = [outdir, 'vcf'].join('/')
     def outflt = [outdir, 'vcf-filtered'].join('/')
+    def outcat = [outdir, 'vcf-final'].join('/')
 
     /*
     Create a junk 'no_regions' file to prevent broken symlinks breaking output channels
@@ -311,6 +313,7 @@ workflow VARIANT {
         // Genotype and call variants
         standard_mpileup_call(
             ch_data,
+            params.vcftype,
             mapq,
             baseq,
             ploidy,
@@ -367,6 +370,7 @@ workflow VARIANT {
         // Genotype and call variants - each channel input is a separate chromosome
         joint_mpileup_call(
             ch_data,
+            params.vcftype,
             mapq,
             baseq,
             ploidy,
@@ -383,6 +387,25 @@ workflow VARIANT {
             normOpt,
             sortOpt,
             outflt
+        )
+
+        // Concatenate the chromosome VCF files together into a single output
+        joint_filter.out.vcf
+            .groupTuple()
+            .map {
+                vcfs = []
+                idxs = []
+                it[1].each { i ->
+                    vcfs << i[0]
+                    idxs << i[1]
+                }
+                tuple(it[0], vcfs, idxs)
+            }
+            .set { ch_vcfs }
+        
+        concat(
+            ch_vcfs,
+            outcat
         )
     }
 }
