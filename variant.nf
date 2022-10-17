@@ -273,39 +273,23 @@ workflow VARIANT {
     }
 
     /*
-    Coverage information per-samples
-    */
-    switch(params.method) {
-        case 'joint':
-            ch_data
-                .map {
-                    lst = []
-                    it[1].each { bam_idx ->
-                        lst << bam_idx[0]
-                    }
-                    tuple(lst, it[3])
-                }
-                .transpose()
-                .unique()
-                .map {tuple(it[0].baseName, it[0], it[1])}
-                .set { ch_cov }
-            break;
-        case 'standard':
-            ch_data
-                .map { 
-                    tuple(it[0], it[1], it[3])
-                }
-                .set { ch_cov }
-    }
-
-    coverage(ch_cov, outcov)
-
-    /*
     Call variants and filter
     */
 
     // Make BAM tuple (bam and idx) into separate tuples
     if (params.method == 'standard') {
+
+        /*
+        Coverage information per sample
+        */
+        ch_data
+            .map { 
+                tuple(it[0], it[1], it[3])
+            }
+            .set { ch_cov }
+
+        coverage(ch_cov, outcov)
+
         // Genotype and call variants
         standard_mpileup_call(
             ch_data,
@@ -339,14 +323,33 @@ workflow VARIANT {
             outflt
         )
     } else {
+        
+        /*
+        Coverage information per-samples
+        */
+        ch_data
+            .map {
+                // TODO: This causes java.util.ConcurrentModificationException.
+                def lst = []
+                it[1].each { bam_idx ->
+                    lst << bam_idx[0]
+                }
+                tuple(lst, it[3])
+            }
+            .transpose()
+            .unique()
+            .map {tuple(it[0].baseName, it[0], it[1])}
+            .set { ch_cov }
+
+        coverage(ch_cov, outcov)
 
         // One final channel manipulation to get BAM files into a single
         // 'list' and their BAI files into another. Required for linking
         // into the working directory (avoids the 'input1.bam' from tmp issue).
         ch_data
             .map {
-                bams = []
-                idx = []
+                def bams = []
+                def idx = []
                 it[1].each { tup ->
                     bams << file(tup[0])
                     idx << file(tup[1])
