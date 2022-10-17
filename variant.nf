@@ -364,11 +364,11 @@ workflow VARIANT {
                     it[5]
                 )
             }
-            .set { ch_data }
+            .set { ch_input }
 
         // Genotype and call variants - each channel input is a separate chromosome
         joint_mpileup_call(
-            ch_data,
+            ch_input,
             params.vcftype,
             mapq,
             baseq,
@@ -392,8 +392,8 @@ workflow VARIANT {
         joint_filter.out.vcf
             .groupTuple()
             .map {
-                vcfs = []
-                idxs = []
+                def vcfs = []
+                def idxs = []
                 it[1].each { i ->
                     vcfs << i[0]
                     idxs << i[1]
