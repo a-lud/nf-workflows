@@ -176,18 +176,18 @@ workflow VARIANT {
                     .map { refid, regions ->
                     // Write regions to respecitve BED files
                         regions.each {
-                            regFile = file("${outreg}/${refid}_${it[0]}.bed")
+                            regFile = file("${outreg}/${refid}:${it[0]}.bed")
                             regFile << it.join('\t') + "\n"
                         }
                     }
-                    .map { file( "${outreg}/zzz.bed") << '\n' }
+                    .map { file( "${outreg}/DONE.bed") << '\n' }
 
                 // Read in the now split BED files
                 Channel
                     .watchPath("${outreg}/*.bed", 'create,modify')
-                    .until { file -> file.baseName == 'zzz' }
+                    .until { file -> file.baseName == 'DONE' }
                     .map {
-                        def sp = it.baseName.split("_")
+                        def sp = it.baseName.split(":")
                         tuple(sp[0], sp[1], file(it) ) 
                     }
                     .set { ch_regions_by_chrom }
@@ -197,9 +197,9 @@ workflow VARIANT {
                 // Split BED files exist from a previous run - simply create a channel for them
                 Channel
                     .fromFilePairs("${outreg}/*.bed", size: 1)
-                    .filter { it[0] != "zzz" }
+                    .filter { it[0] != "DONE" }
                     .map { id, bed ->
-                        def sp = id.split('_')
+                        def sp = id.split(':')
                         tuple(sp[0], sp[1], file(bed[0]))
                     }
                     .combine(ch_ref, by: 0)
