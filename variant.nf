@@ -25,6 +25,10 @@ workflow VARIANT {
     */
 
     // Optional argument values
+    def force = params.containsKey('force') ?
+        params.force :
+        false
+
     def nodp = params.containsKey('nodp') ? 
         params.nodp :
         false
@@ -76,6 +80,7 @@ workflow VARIANT {
     def outdir = [params.outdir, params.out_prefix].join('/')
     def outtmp = [outdir, 'junk'].join('/')
     def outbml = [outdir, 'bamlists'].join('/')
+    def outreg = [outdir, 'regions'].join('/')
     def outcov = [outdir, 'coverage-stats'].join('/')
     def outvcf = [outdir, 'vcf'].join('/')
     def outflt = [outdir, 'vcf-filtered'].join('/')
@@ -90,6 +95,8 @@ workflow VARIANT {
     def removeThis = new File("${outtmp}")
     def junkFile = new File("${outtmp}/no_regions")
     junkFile.createNewFile()
+
+    file("${outtmp}/no_regions") << '\n'
 
     /*
     Sort out the input data channels
@@ -108,155 +115,206 @@ workflow VARIANT {
             tuple( tuple(file(bam), file(bai)), file(ref) )
         }
         .set { ch_tmp }
+
+    /*
+    Create two reference channels
+        * ch_ref_fa = [ refi.basename, ref.fasta ]
+        * ch_ref = [ ref.basename ]
+    */
+    ch_tmp
+        .map { tuple(it[1].baseName,it[1])}
+        .unique()
+        .tap  { ch_ref_fa }
+        .map { it[0] }
+        .tap { ch_ref }
     
     // Check regions - this dicates the parallel nature below
     //      - Output channel: [ID, ref, <regions>]
     if ( params.containsKey('regions') ) {
 
-        // File channel of regions files
+        /*
+        Default regions channel - [ bed.basename, file ]
+        */
         Channel
             .fromFilePairs(
                 [params.regions.path, params.regions.pattern].join('/'),
                 size: params.regions.nfiles,
             )
-            .set { ch_r }
+            .set { ch_regions }
 
-        // Reference channel
-        ch_tmp
-            .map { tuple(it[1].baseName,it[1])}
-            .unique()
-            .set { ch_ref }
+        /*
+        CheckRegionsSubset will check if
+            1. the regions sub-directory exists. If it doesn't it returns false
+            2. If there are files within the regions directory. Returns false if there are none.
+        */
+
+        def checkRegionSubset = Tools.checkDirAndFiles(outreg)
 
         // Joint method should be parallelised based on chromosomes in region file
         if (params.method == 'joint') {
 
-            // Get chromsomes from regions file
-            ch_r
-                .map { tuple(it[0], it[1][0])}
-                .splitCsv(elem: 1, sep: "\t")
-                .map {
-                    tuple(it[0], it[1][0])
-                }
-                .unique()
-                .groupTuple()
-                .set { ch_chr }
-
-            // Join and transpose so we end up with [ refid, reference, chr ] for every combination
-            ch_ref
-                .join(ch_chr, by: 0, remainder: true)
-                .transpose()
-                .set { ch_regions }
-
             /*
-            Create a dummy channel so there is something to join on.
-            Prevents the dropping of channel elements when there is no key to join on.
+            Subset BED file by chromosome if the files don't exist/forece isn't used
+                * The whole point of doing this in the script is to enable resume
+                  functionality. Filtering for the chromosomes in the process
+                  messess up the resume flag.
             */
-            ch_ref
-                .map { tuple(it[0], null)}
-                .concat(ch_r)
-                .groupTuple()
-                .map { id, bed ->
-                    if (bed.size() > 1) {
-                        b = bed - null
-                        return tuple(id, b[0][0])
+
+            // Split on chromosome because force/the files don't exist already
+            //  * Channel returned [ ref.basename, ref chr, bed.filepath ]
+            if ( (!checkRegionSubset) || (force) ) {
+
+                // Create output directory
+                file(outreg).mkdirs()
+
+                // Split region BED files up by chromosome
+                ch_regions
+                    .join(ch_ref)
+                    .map { tuple(it[0], it[1][0]) }
+                    .splitCsv(elem: 1, sep: "\t")
+                    .groupTuple()
+                    .map { refid, regions ->
+                    // Write regions to respecitve BED files
+                        regions.each {
+                            regFile = file("${outreg}/${refid}_${it[0]}.bed")
+                            regFile << it.join('\t') + "\n"
+                        }
                     }
-                    return tuple(id, file("${outtmp}/no_regions"))
-                }
-                .set { ch_dummy }
+                    .map { file( "${outreg}/zzz.bed") << '\n' }
 
-            ch_regions
-                .combine(ch_dummy, by: 0)
-                .set { ch_regions }
+                // Read in the now split BED files
+                Channel
+                    .watchPath("${outreg}/*.bed", 'create,modify')
+                    .until { file -> file.baseName == 'zzz' }
+                    .map {
+                        def sp = it.baseName.split("_")
+                        tuple(sp[0], sp[1], file(it) ) 
+                    }
+                    .set { ch_regions_by_chrom }
 
-        } else {
-            // Join with data channels - set as no_regions if no regions
-            ch_ref
-                .join(ch_r, by: 0, remainder: true)
-                .map {
-                    it[2] = it[2] ?: file("${outtmp}/no_regions")
+            } else {
+
+                // Split BED files exist from a previous run - simply create a channel for them
+                Channel
+                    .fromFilePairs("${outreg}/*.bed", size: 1)
+                    .filter { it[0] != "zzz" }
+                    .map { id, bed ->
+                        def sp = id.split('_')
+                        tuple(sp[0], sp[1], file(bed[0]))
+                    }
+                    .combine(ch_ref, by: 0)
+                    .set { ch_regions_by_chrom }
+            }
+
+            // Reintroduce reference files that might not have associated region files
+            ch_regions_by_chrom.groupTuple(by:0).set { temp }
+            ch_ref_fa
+                .join(temp, remainder: true)
+                .map { 
+                    if (!it[2]) {
+                        return tuple(it[0], it[1], [null], [file("${outtmp}/no_regions")])
+                    }
                     return it
                 }
-                .set { ch_regions }
-        }
-    } else {
-        // Reference channel
-        ch_tmp
-            .map { tuple(it[1].baseName,it[1])}
-            .unique()
-            .set { ch_ref }
+                .transpose()
+                .set { ch_ref_fa_regions }
 
+        // Standard - [ ref.basename, reference, bed ]
+        } else {
+            // Join with data channels - set as no_regions if no regions
+            ch_ref_fa
+                .join(ch_regions, by: 0, remainder: true)
+                .map {
+                    it[2] = it[2] ?: [ file("${outtmp}/no_regions") ]
+                    return it
+                }
+                .unique()
+                .set { ch_ref_fa_regions }
+        }
+
+    // No regions - empty channels to fill in the gaps
+    } else {
+ 
         // Set no regions (null or file depending on method)
         if (params.method == 'joint') {
-            ch_ref
+            ch_ref_fa
                 .map {
                     tuple(it[0], it[1], null, file("${outtmp}/no_regions"))
                 }
-                .set { ch_regions }
+                .set { ch_ref_fa_regions }
 
         } else {
-            ch_ref
+            ch_ref_fa
                 .map {
-                    tuple(it[0], it[1], file("${outtmp}/no_regions"))
+                    tuple(it[0], it[1], [ file("${outtmp}/no_regions") ])
                 }
-                .set { ch_regions }
+                .set { ch_ref_fa_regions }
         }
     }
 
     /*
-    The design here is having a channel of the form:
-        
-        - Joint genotyping
-            * [ ID, [BAM/S], BAMLIST, REFERENCE, CHR, REG.BED ]
-        - Standard genotyping
-            * [ ID, BAM, REF, REG.BED]
-    
-    Where ID will either be 
-        - BAM basename if in standard mode
-        - REF basename if in join mode
-
-    In either case, we just need a unique identifier to have for the output.
-    Each of these IDs make sense for their own variant calling approach.
+    Channel structures going into the next section:
+        * Joint with regions - [ ref.bn, ref, chr, bed ]
+        * Joint no regions - [ ref.bn, ref, null, no_regions ]
+        * Standard with regions - [ ref.bn, ref, bed ]
+        * Standard no regions - [ ref.bn, ref, no_regions ]
     */
 
     // Manage input channels depending on variant calling type
     if (params.method == 'joint') {
 
-        // Group BAM files by reference genomes - [ [BAM1, BAM2, BAM..., BAMN], reference ]
+        // Check if bamlist files exist already - use existing to preserve 'resume' functionality
+        def checkBamlist = Tools.checkDirAndFiles(outbml)
+
+        // If Bam-list files don't exist, or force is provided
+        if ( (!checkBamlist) || (force) ) {
+            // Create output directory for bamlist files
+            file(outbml).mkdirs()
+
+            // Group bam files by their respective reference genomes
+            ch_tmp
+                .groupTuple(by: 1)
+                .map { bams, ref ->
+                    tuple(ref.baseName, bams)
+                }
+                .set { ch_id_bam }
+            
+            // Make a bam-list file for each reference
+            ch_id_bam
+                .map { refid, bams ->
+                    bamListFile = file("${outbml}/${refid}.bamlist") //  [outbml, refid + '.bamlist'].join('/') 
+                    bams.each {
+                        bamListFile << it[0].getName() + '\n'
+                    }
+                }
+                .map { 
+                    // Create the termination file 
+                    file( "$outbml/DONE.bamlist") << '\n'
+                }
+            
+            Channel
+                .watchPath("${outbml}/*.bamlist", 'create,modify')
+                .until { file -> file.baseName == 'DONE' }
+                .map {
+                    tuple(it.baseName, it)
+                }
+                .set { ch_bamlist }
+        } else {
+            Channel
+                .fromFilePairs("${outbml}/*.bamlist", size: 1)
+                .filter { it[0] != "DONE" }
+                .set { ch_bamlist }
+        }
+
+        // Join reference + bams channel with bamlist and regions channel
         ch_tmp
             .groupTuple(by: 1)
             .map { bams, ref ->
                 tuple(ref.baseName, bams)
             }
-            .set { ch_id_bam }
-
-        // Create output directory
-        file(outbml).mkdirs()
-        
-        // Make a bam-list file for each reference
-        ch_id_bam
-            .map { refid, bams ->
-                bamListFile = file("${outbml}/${refid}.bamlist") //  [outbml, refid + '.bamlist'].join('/') 
-                bams.each {
-                    bamListFile << it[0].getName() + '\n'
-                }
-            }
-            .map { 
-                // Create the termination file 
-                file( "$outbml/zzz.bamlist") << '\n'
-            }
-
-        Channel
-            .watchPath("${outbml}/*.bamlist", 'create,modify')
-            .until { file -> file.baseName == 'zzz' }
-            .map {
-                tuple(it.baseName, it)
-            }
-            .set { ch_bamlist }
-        
-        // Join bamlist to reference - bams channel (on reference id key)
-        ch_id_bam
             .join(ch_bamlist)
-            .combine(ch_regions, by: 0)
+            .combine(ch_ref_fa_regions, by: 0)
+            .unique()
             .set { ch_data }
 
     // Standard mode - calling variants for individual samples
@@ -265,9 +323,9 @@ workflow VARIANT {
             .map { bam, ref ->
                 tuple(ref.baseName, bam)
             }
-            .combine(ch_regions, by: 0)
+            .combine(ch_ref_fa_regions, by: 0)
             .map {
-                tuple(it[1][0].baseName, it[1][0], it[1][1], it[2], it[3])
+                tuple(it[1][0].baseName, it[1][0], it[1][1], it[2], it[3][0])
             }
             .set { ch_data }
     }
@@ -329,7 +387,6 @@ workflow VARIANT {
         */
         ch_data
             .map {
-                // TODO: This causes java.util.ConcurrentModificationException.
                 def lst = []
                 it[1].each { bam_idx ->
                     lst << bam_idx[0]
@@ -402,6 +459,7 @@ workflow VARIANT {
             }
             .set { ch_vcfs }
         
+        // TODO: Only concat if regions == True
         concat(
             ch_vcfs,
             outcat
