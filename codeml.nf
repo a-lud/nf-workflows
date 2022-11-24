@@ -61,7 +61,7 @@ workflow CODEML {
 
     // Build summary tables
     codeml.out.cml.collect().set { ch_codeml }
-    etetools(ch_codeml, 'standard', outdir_codeml)
+    etetools(ch_codeml, 'standard', outdir)
 
     // Run dropout analysis
     if (dropout) {
@@ -85,13 +85,13 @@ workflow CODEML {
             codeml_dropout.out.cml.collect().set { ch_dropout }
 
             // Build summary tables
-            etetools_dropout(ch_dropout, 'dropout', outdir_dropout)
+            etetools_dropout(ch_dropout, 'dropout', outdir)
 
             // compare drop out site models to branch-site models
             etetools.out.summary.set { ch_etetool_summary }
             etetools_dropout.out.summary.set { ch_dropout_summary }
 
-            compareLRT(ch_etetool_summary, ch_dropout_summary, outdir_dropout)
+            compareLRT(ch_etetool_summary, ch_dropout_summary, outdir)
         }
     }
 
