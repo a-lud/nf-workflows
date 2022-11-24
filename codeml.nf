@@ -78,7 +78,7 @@ workflow CODEML {
             // Dropout codeml run
             codeml_dropout(
                 ch_msa_tree_no_fg,
-                'M1 M2 M7 M8',
+                'M1 M2',
                 outdir_dropout
             )
 
