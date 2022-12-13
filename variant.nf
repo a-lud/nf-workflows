@@ -25,6 +25,8 @@ workflow VARIANT {
     */
 
     // Optional argument values
+    def caller = params.caller == 'new' ? '-m' : '-c'
+
     def force = params.containsKey('force') ?
         params.force :
         false
@@ -118,7 +120,7 @@ workflow VARIANT {
 
     /*
     Create two reference channels
-        * ch_ref_fa = [ refi.basename, ref.fasta ]
+        * ch_ref_fa = [ ref.basename, ref.fasta ]
         * ch_ref = [ ref.basename ]
     */
     ch_tmp
@@ -351,6 +353,7 @@ workflow VARIANT {
         // Genotype and call variants
         standard_mpileup_call(
             ch_data,
+            caller,
             params.vcftype,
             mapq,
             baseq,
@@ -426,6 +429,7 @@ workflow VARIANT {
         // Genotype and call variants - each channel input is a separate chromosome
         joint_mpileup_call(
             ch_input,
+            caller,
             params.vcftype,
             mapq,
             baseq,
