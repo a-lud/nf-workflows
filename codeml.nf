@@ -15,6 +15,7 @@ Pipeline overview:
 
 // Import pipeline functions
 include { remove_foreground } from '../nf-modules/general/remove_foreground'
+include { clean } from '../nf-modules/hyphy/2.5.42/clean'
 include { codeml } from '../nf-modules/ete3/3.1.2/codeml'
 include { codeml as codeml_dropout } from '../nf-modules/ete3/3.1.2/codeml'
 include { etetools } from '../nf-modules/general/etetools'
@@ -27,11 +28,11 @@ workflow CODEML {
 
     // Get MSA fasta files
     Channel
-        .fromFilePairs(
-            [params.msa.path, params.msa.pattern].join('/'),
-            size: params.msa.nfiles,
+        .fromPath(
+            [params.msa.path, params.msa.pattern].join('/')
         )
         .ifEmpty { exit 1, "Can't find MSA files." }
+        .collect()
         .set { ch_msa }
     
     // Get tree file
@@ -45,9 +46,15 @@ workflow CODEML {
     // Define some variables
     def outdir = params.outdir + '/' + params.out_prefix
     def dropout = params.containsKey('dropout') ?: false
+
+    // Add HyPhy CLN step to remove any internal stop codons
+    clean(ch_msa)
+
+    // Make claen channel into [ id, file ]
+    clean.out.flatten().map { return tuple(it.simpleName, it) }.set { ch_clean }
     
     // Combine MSA files with tree file
-    ch_msa.combine(ch_tree).set { ch_msa_tree }
+    ch_clean.combine(ch_tree).set { ch_msa_tree }
 
     // Outdir for general run
     outdir_codeml = outdir + '/codeml'
@@ -70,7 +77,7 @@ workflow CODEML {
             remove_foreground(ch_tree, outdir)
 
             // Combine MSA files with foreground removed tree file
-            ch_msa.combine(remove_foreground.out.no_fg).set { ch_msa_tree_no_fg }
+            ch_clean.combine(remove_foreground.out.no_fg).set { ch_msa_tree_no_fg }
 
             // Run ONLY site models
             outdir_dropout = outdir + '/codeml_dropout'
