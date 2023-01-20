@@ -33,7 +33,7 @@ workflow HYPHY_ANALYSES {
         .set { ch_tree }
 
     // Define some variables
-    def libpath = params.exedir + '/res'
+    def libpath = params.hyphyDev + '/res'
 
     def outdir = params.outdir + '/' + params.out_prefix
     def outhyphy = outdir + '/hyphy'
@@ -45,8 +45,9 @@ workflow HYPHY_ANALYSES {
     // Submit each MSA as separate job
     busted_ph(
         ch_msa_tree,
-        params.exedir,
+        params.hyphyDev,
         libpath,
+        params.hyphyAnalysis,
         params.batchFile,
         params.testLabel,
         outhyphy,
