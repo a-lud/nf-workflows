@@ -156,7 +156,7 @@ workflow VARIANT {
         if (params.method == 'joint') {
 
             /*
-            Subset BED file by chromosome if the files don't exist/forece isn't used
+            Subset BED file by chromosome if the files don't exist/force isn't used
                 * The whole point of doing this in the script is to enable resume
                   functionality. Filtering for the chromosomes in the process
                   messess up the resume flag.
