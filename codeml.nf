@@ -16,10 +16,8 @@ Pipeline overview:
 // Import pipeline functions
 include { remove_foreground } from '../nf-modules/general/remove_foreground'
 include { clean } from '../nf-modules/hyphy/2.5.42/clean'
-include { codeml } from '../nf-modules/ete3/3.1.2/codeml'
-include { codeml as codeml_dropout } from '../nf-modules/ete3/3.1.2/codeml'
-include { etetools } from '../nf-modules/general/etetools'
-include { etetools as etetools_dropout } from '../nf-modules/general/etetools'
+include { codeml;  codeml as codeml_dropout} from '../nf-modules/ete3/3.1.2/codeml'
+include { etetools; etetools as etetools_dropout } from '../nf-modules/general/etetools'
 include { compareLRT } from '../nf-modules/general/compareLRT'
 
 // Sub-workflow
